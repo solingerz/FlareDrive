@@ -29,8 +29,8 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
   const uploadEnqueue = useUploadEnqueue();
 
   const handleSaveNote = () => {
-    const fileBlob = new Blob([noteText], { type: "text/plain" });
-    const file = new File([fileBlob], noteName, { type: "text/plain" });
+    const fileBlob = new Blob([noteText], { type: "text/plain;charset=utf-8" });
+    const file = new File([fileBlob], noteName, { type: "text/plain;charset=utf-8" });
     uploadEnqueue({ file, basedir: cwd });
     onUpload(); // Refresh file list after upload
     setOpen(false); // Close drawer
