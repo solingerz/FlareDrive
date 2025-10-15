@@ -16,6 +16,7 @@ import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
 import { copyPaste, fetchPath } from "./app/transfer";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
+import { shareFile } from "./app/share";
 
 // Centered helper
 function Centered({ children }: { children: React.ReactNode }) {
@@ -263,13 +264,9 @@ function Main({
             await fetch(`/webdav/${encodeKey(key)}`, { method: "DELETE" });
           fetchFiles();
         }}
-        onShare={() => {
+        onShare={async () => {
           if (multiSelected?.length !== 1) return;
-          const url = new URL(
-            `/webdav/${encodeKey(multiSelected[0])}`,
-            window.location.href
-          );
-          navigator.share({ url: url.toString() });
+          await shareFile(multiSelected[0]);
         }}
       />
     </>
