@@ -46,24 +46,23 @@ export async function systemShare(shareData: ShareResponse): Promise<void> {
     `Expires at: ${expireTime}\n\n` +
     `Link: ${shareData.shareUrl}`;
 
-  const canUseWebShare =
-    typeof navigator.share === 'function' &&
-    ((navigator as any).canShare?.({ url: shareData.shareUrl }) ?? true);
-
-  if (canUseWebShare) {
-    try {
-      await navigator.share({
-        title: `Shared file: ${shareData.fileName}`,
-        text: `File will expire at ${expireTime}`,
-        url: shareData.shareUrl,
-      });
-      return;
-    } catch (err) {
-    }
-  }
-
   try {
     await navigator.clipboard.writeText(shareData.shareUrl);
+    
+    const canUseWebShare =
+      typeof navigator.share === 'function' &&
+      ((navigator as any).canShare?.({ url: shareData.shareUrl }) ?? true);
+
+    if (canUseWebShare) {
+      try {
+        await navigator.share({
+          url: shareData.shareUrl,
+        });
+        return;
+      } catch (err) {
+      }
+    }
+    
     alert(message + '\n\nLink copied to clipboard!');
   } catch {
     alert(message + '\n\nCopy the link manually if needed.');

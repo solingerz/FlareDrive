@@ -11,9 +11,6 @@ interface ShareResponse {
   fileName: string;
 }
 
-/**
- * 生成安全的随机分享 token
- */
 function generateShareToken(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
@@ -23,7 +20,6 @@ function generateShareToken(): string {
 export async function onRequestPost(context: any): Promise<Response> {
   const { request, env } = context;
 
-  // 使用统一的认证中间件 (POST 请求始终需要认证)
   const authError = requireAuthSimple(
     request,
     env.WEBDAV_USERNAME,
@@ -51,8 +47,29 @@ export async function onRequestPost(context: any): Promise<Response> {
     const meta = await bucket.head(body.filePath);
     if (!meta) return new Response("File not found", { status: 404 });
 
-    const token = generateShareToken();
+    const pathKey = `path:${body.filePath}`;
+    const existingTokenData = await kv.get(pathKey);
+    
+    let token: string;
+    let isNewShare = true;
+    
+    if (existingTokenData) {
+      const existingToken = existingTokenData;
+      const existingData = await kv.get(existingToken);
+      
+      if (existingData) {
+        await kv.delete(existingToken);
+        await kv.delete(pathKey);
+      }
+    }
+    
+    token = generateShareToken();
+    
     await kv.put(token, JSON.stringify({ filePath: body.filePath }), {
+      expirationTtl: expireSeconds,
+    });
+    
+    await kv.put(pathKey, token, {
       expirationTtl: expireSeconds,
     });
 
