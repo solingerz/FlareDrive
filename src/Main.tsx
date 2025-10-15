@@ -16,7 +16,7 @@ import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
 import { copyPaste, fetchPath } from "./app/transfer";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
-import { shareFile } from "./app/share";
+import { systemShare, generateShareData } from "./app/share";
 
 // Centered helper
 function Centered({ children }: { children: React.ReactNode }) {
@@ -266,7 +266,8 @@ function Main({
         }}
         onShare={async () => {
           if (multiSelected?.length !== 1) return;
-          await shareFile(multiSelected[0]);
+          const data = await generateShareData(multiSelected[0]);
+          await systemShare(data);
         }}
       />
     </>

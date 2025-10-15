@@ -1,6 +1,7 @@
+import { requireAuthSimple } from "../../utils/auth";
+
 interface ShareRequest {
   filePath: string;
-  expireSeconds?: number;
 }
 
 interface ShareResponse {
@@ -10,13 +11,9 @@ interface ShareResponse {
   fileName: string;
 }
 
-function validateAuth(request: Request, env: any): boolean {
-  const auth = request.headers.get("Authorization");
-  if (!auth) return false;
-  const expectedAuth = `Basic ${btoa(`${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`)}`;
-  return auth === expectedAuth;
-}
-
+/**
+ * 生成安全的随机分享 token
+ */
 function generateShareToken(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
@@ -26,15 +23,14 @@ function generateShareToken(): string {
 export async function onRequestPost(context: any): Promise<Response> {
   const { request, env } = context;
 
-  if (!env.WEBDAV_USERNAME || !env.WEBDAV_PASSWORD) {
-    return new Response("WebDAV protocol is not enabled", { status: 403 });
-  }
-  if (!validateAuth(request, env)) {
-    return new Response("Unauthorized", {
-      status: 401,
-      headers: { "WWW-Authenticate": `Basic realm="WebDAV"` },
-    });
-  }
+  // 使用统一的认证中间件 (POST 请求始终需要认证)
+  const authError = requireAuthSimple(
+    request,
+    env.WEBDAV_USERNAME,
+    env.WEBDAV_PASSWORD
+  );
+  if (authError) return authError;
+
   if (env.SHARE_ENABLED !== "true") {
     return new Response("Share functionality is disabled", { status: 403 });
   }
@@ -45,16 +41,7 @@ export async function onRequestPost(context: any): Promise<Response> {
       return new Response("filePath is required", { status: 400 });
     }
 
-    const defaultExpireSeconds = parseInt(env.SHARE_DEFAULT_EXPIRE_SECONDS || "3600", 10);
-    const maxExpireSeconds = env.SHARE_MAX_EXPIRE_SECONDS
-      ? parseInt(env.SHARE_MAX_EXPIRE_SECONDS, 10)
-      : undefined;
-
-    let expireSeconds = body.expireSeconds ?? defaultExpireSeconds;
-    if (expireSeconds < 60) expireSeconds = 60;
-    if (Number.isFinite(maxExpireSeconds) && maxExpireSeconds! > 0) {
-      expireSeconds = Math.min(expireSeconds, maxExpireSeconds!);
-    }
+    const expireSeconds = parseInt(env.SHARE_DEFAULT_EXPIRE_SECONDS || "3600", 10);
 
     const bucket = env.BUCKET;
     const kv = env.SHARE_KV;

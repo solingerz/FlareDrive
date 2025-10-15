@@ -9,6 +9,7 @@ import { handleRequestPropfind } from "./propfind";
 import { handleRequestPut } from "./put";
 import { RequestHandlerParams } from "./utils";
 import { handleRequestPost } from "./post";
+import { requireAuth } from "../../utils/auth";
 
 async function handleRequestOptions() {
   return new Response(null, {
@@ -38,36 +39,27 @@ const HANDLERS: Record<
   DELETE: handleRequestDelete,
 };
 
-export const onRequest: PagesFunction<{
-  WEBDAV_USERNAME: string;
-  WEBDAV_PASSWORD: string;
-  WEBDAV_PUBLIC_READ?: string;
-}> = async function (context) {
+export const onRequest = async function (context: {
+  request: Request;
+  env: {
+    WEBDAV_USERNAME: string;
+    WEBDAV_PASSWORD: string;
+    WEBDAV_PUBLIC_READ?: string;
+    [key: string]: any;
+  };
+  params: any;
+}) {
   const env = context.env;
   const request: Request = context.request;
   if (request.method === "OPTIONS") return handleRequestOptions();
 
-  const skipAuth =
-    env.WEBDAV_PUBLIC_READ === "1" &&
-    ["GET", "HEAD", "PROPFIND"].includes(request.method);
-
-  if (!skipAuth) {
-    if (!env.WEBDAV_USERNAME || !env.WEBDAV_PASSWORD)
-      return new Response("WebDAV protocol is not enabled", { status: 403 });
-
-    const auth = request.headers.get("Authorization");
-    if (!auth) {
-      return new Response("Unauthorized", {
-        status: 401,
-        headers: { "WWW-Authenticate": `Basic realm="WebDAV"` },
-      });
-    }
-    const expectedAuth = `Basic ${btoa(
-      `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-    )}`;
-    if (auth !== expectedAuth)
-      return new Response("Unauthorized", { status: 401 });
-  }
+  // 使用统一的认证中间件
+  const authError = requireAuth(request, {
+    username: env.WEBDAV_USERNAME,
+    password: env.WEBDAV_PASSWORD,
+    publicRead: env.WEBDAV_PUBLIC_READ === "1",
+  });
+  if (authError) return authError;
 
   const [bucket, path] = parseBucketPath(context);
   if (!bucket) return notFound();
