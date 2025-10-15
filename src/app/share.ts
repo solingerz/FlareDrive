@@ -42,16 +42,18 @@ export async function createShareLink(filePath: string, expireSeconds?: number):
     }
   }
 
+  const payload: ShareRequest = {
+    filePath,
+    expireSeconds: expireSeconds ?? 3600
+  };
+
   const response = await fetch('/api/share/create', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Basic ${auth}`
     },
-    body: JSON.stringify({
-      filePath,
-      expireSeconds: expireSeconds || 3600
-    })
+    body: JSON.stringify(payload)
   });
 
   if (response.status === 401) {
@@ -67,10 +69,7 @@ export async function createShareLink(filePath: string, expireSeconds?: number):
         'Content-Type': 'application/json',
         'Authorization': `Basic ${auth}`
       },
-      body: JSON.stringify({
-        filePath,
-        expireSeconds: expireSeconds || 3600
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!retryResponse.ok) {
@@ -88,6 +87,7 @@ export async function createShareLink(filePath: string, expireSeconds?: number):
 
   return response.json();
 }
+
 
 export async function shareFile(filePath: string): Promise<void> {
   try {
