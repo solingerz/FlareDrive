@@ -20,7 +20,6 @@ interface ShareContext {
     WEBDAV_PASSWORD: string;
     SHARE_ENABLED?: string;
     SHARE_DEFAULT_EXPIRE_SECONDS?: string;
-    SHARE_MAX_EXPIRE_SECONDS?: string;
     BUCKET?: any;
     [key: string]: any;
   };

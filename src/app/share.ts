@@ -47,7 +47,7 @@ export async function createShareLink(filePath: string, expireSeconds?: number):
     expireSeconds: expireSeconds ?? 3600
   };
 
-  const response = await fetch('/api/share/create', {
+  const response = await fetch('/api/share', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ export async function createShareLink(filePath: string, expireSeconds?: number):
       throw new Error('WebDAV authentication required');
     }
 
-    const retryResponse = await fetch('/api/share/create', {
+    const retryResponse = await fetch('/api/share', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
