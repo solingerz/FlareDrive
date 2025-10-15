@@ -11,8 +11,7 @@ interface ShareResponse {
 }
 
 function getWebDAVAuth(): string | null {
-  const auth = sessionStorage.getItem('webdav_auth');
-  return auth;
+  return sessionStorage.getItem('webdav_auth');
 }
 
 function setWebDAVAuth(username: string, password: string) {
@@ -23,92 +22,95 @@ function setWebDAVAuth(username: string, password: string) {
 async function promptForAuth(): Promise<string | null> {
   const username = prompt('Please enter WebDAV username:');
   if (!username) return null;
-  
+
   const password = prompt('Please enter WebDAV password:');
   if (!password) return null;
-  
+
   const auth = btoa(`${username}:${password}`);
   setWebDAVAuth(username, password);
   return auth;
 }
 
-export async function createShareLink(filePath: string, expireSeconds?: number): Promise<ShareResponse> {
+export async function createShareLink(
+  filePath: string,
+  expireSeconds?: number
+): Promise<ShareResponse> {
   let auth = getWebDAVAuth();
-  
   if (!auth) {
     auth = await promptForAuth();
-    if (!auth) {
-      throw new Error('WebDAV authentication required');
-    }
+    if (!auth) throw new Error('WebDAV authentication required');
   }
 
   const payload: ShareRequest = {
     filePath,
-    expireSeconds: expireSeconds ?? 3600
+    expireSeconds: expireSeconds ?? 3600,
   };
 
-  const response = await fetch('/api/share', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Basic ${auth}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  if (response.status === 401) {
-    sessionStorage.removeItem('webdav_auth');
-    auth = await promptForAuth();
-    if (!auth) {
-      throw new Error('WebDAV authentication required');
-    }
-
-    const retryResponse = await fetch('/api/share', {
+  const doPost = async () => {
+    const res = await fetch('/api/share', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
+        'Authorization': `Basic ${auth}`,
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
-
-    if (!retryResponse.ok) {
-      const errorText = await retryResponse.text();
-      throw new Error(errorText);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `HTTP ${res.status}`);
     }
+    return res.json();
+  };
 
-    return retryResponse.json();
+  try {
+    return await doPost();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('Unauthorized') || msg.includes('401')) {
+      sessionStorage.removeItem('webdav_auth');
+      auth = await promptForAuth();
+      if (!auth) throw new Error('WebDAV authentication required');
+      return await doPost();
+    }
+    throw e;
   }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText);
-  }
-
-  return response.json();
 }
 
+export async function generateShareData(
+  filePath: string,
+  expireSeconds?: number
+): Promise<ShareResponse> {
+  return await createShareLink(filePath, expireSeconds);
+}
 
-export async function shareFile(filePath: string): Promise<void> {
-  try {
-    const shareData = await createShareLink(filePath);
-    
-    const expireTime = new Date(shareData.expireTime).toLocaleString();
-    const message = `Share link created!\n\nFile name: ${shareData.fileName}\nExpires at: ${expireTime}\n\nLink: ${shareData.shareUrl}`;
-    
-    if (navigator.share) {
-      await navigator.share({ 
+export async function systemShare(shareData: ShareResponse): Promise<void> {
+  const expireTime = new Date(shareData.expireTime).toLocaleString();
+  const message =
+    `Share link created!\n\n` +
+    `File name: ${shareData.fileName}\n` +
+    `Expires at: ${expireTime}\n\n` +
+    `Link: ${shareData.shareUrl}`;
+
+  const canUseWebShare =
+    typeof navigator.share === 'function' &&
+    ((navigator as any).canShare?.({ url: shareData.shareUrl }) ?? true);
+
+  if (canUseWebShare) {
+    try {
+      await navigator.share({
         title: `Shared file: ${shareData.fileName}`,
         text: `File will expire at ${expireTime}`,
-        url: shareData.shareUrl 
+        url: shareData.shareUrl,
       });
-    } else {
-      await navigator.clipboard.writeText(shareData.shareUrl);
-      alert(message + '\n\nLink copied to clipboard!');
+      return;
+    } catch (err) {
     }
-    
-  } catch (error) {
-    console.error('Failed to create share link:', error);
-    alert(`Failed to create share link: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+
+  try {
+    await navigator.clipboard.writeText(shareData.shareUrl);
+    alert(message + '\n\nLink copied to clipboard!');
+  } catch {
+    alert(message + '\n\nCopy the link manually if needed.');
   }
 }
