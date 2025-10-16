@@ -2,6 +2,7 @@ export interface RequestHandlerParams {
   bucket: R2Bucket;
   path: string;
   request: Request;
+  env?: any;
 }
 
 export const WEBDAV_ENDPOINT = "/webdav/";

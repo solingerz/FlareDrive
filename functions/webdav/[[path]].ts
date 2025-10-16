@@ -66,5 +66,11 @@ export const onRequest = async function (context: {
 
   const method: string = (context.request as Request).method;
   const handler = HANDLERS[method] ?? handleMethodNotAllowed;
-  return handler({ bucket, path, request: context.request });
+  
+  const params: RequestHandlerParams = { bucket, path, request: context.request };
+  if (method === 'DELETE' || method === 'MOVE') {
+    params.env = context.env;
+  }
+  
+  return handler(params);
 };
