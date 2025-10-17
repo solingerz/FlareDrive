@@ -24,15 +24,32 @@ export function notFound() {
   return new Response("Not found", { status: 404 });
 }
 
+function safeJoin(segments: string[]): string {
+  const out: string[] = [];
+  for (const raw of segments) {
+    const s = decodeURIComponent(String(raw));
+    if (s.includes("/") || s.includes("\\") || s.includes("\0")) {
+      throw new Response("Bad path", { status: 400 });
+    }
+    if (s === "" || s === ".") continue;
+    if (s === "..") {
+      if (!out.length) throw new Response("Path escapes root", { status: 403 });
+      out.pop();
+    } else {
+      out.push(s);
+    }
+  }
+  return out.join("/");
+}
+
 export function parseBucketPath(context: any): [R2Bucket, string] {
   const { request, env, params } = context;
-  const url = new URL(request.url);
+  const driveid = new URL(request.url).hostname.replace(/\..*/, "");
+  const bucket = env[driveid] || env["BUCKET"];
+  if (!bucket) throw new Response("Unknown bucket", { status: 400 });
 
-  const pathSegments = (params.path || []) as String[];
-  const path = decodeURIComponent(pathSegments.join("/"));
-  const driveid = url.hostname.replace(/\..*/, "");
-
-  return [env[driveid] || env["BUCKET"], path];
+  const path = safeJoin((params.path || []) as string[]);
+  return [bucket as R2Bucket, path];
 }
 
 export async function* listAll(

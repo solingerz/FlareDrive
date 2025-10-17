@@ -53,7 +53,6 @@ export const onRequest = async function (context: {
   const request: Request = context.request;
   if (request.method === "OPTIONS") return handleRequestOptions();
 
-  // 使用统一的认证中间件
   const authError = requireAuth(request, {
     username: env.WEBDAV_USERNAME,
     password: env.WEBDAV_PASSWORD,
