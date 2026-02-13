@@ -1,7 +1,29 @@
 import pLimit from "p-limit";
 
 import { notFound } from "./utils";
-import { listAll, RequestHandlerParams, WEBDAV_ENDPOINT } from "./utils";
+import {
+  listAll,
+  RequestHandlerParams,
+  WEBDAV_ENDPOINT,
+  parseBucketPath,
+} from "./utils";
+
+function normalizeDestinationPath(destinationHeader: string, request: Request) {
+  const destinationUrl = new URL(destinationHeader, request.url);
+  if (!destinationUrl.pathname.startsWith(WEBDAV_ENDPOINT)) {
+    throw new Response("Bad Request", { status: 400 });
+  }
+
+  const rawPath = destinationUrl.pathname.slice(WEBDAV_ENDPOINT.length);
+  const pathParts = rawPath.split("/");
+  const fakeContext = {
+    request,
+    env: { BUCKET: {} as R2Bucket },
+    params: { path: pathParts },
+  };
+  const [, normalizedPath] = parseBucketPath(fakeContext);
+  return normalizedPath.replace(/\/$/, "");
+}
 
 export async function handleRequestCopy({
   bucket,
@@ -16,11 +38,14 @@ export async function handleRequestCopy({
   const src = await bucket.get(path);
   if (src === null) return notFound();
 
-  const destPathname = new URL(destinationHeader).pathname;
-  const decodedPathname = decodeURIComponent(destPathname).replace(/\/$/, "");
-  if (!decodedPathname.startsWith(WEBDAV_ENDPOINT))
-    return new Response("Bad Request", { status: 400 });
-  const destination = decodedPathname.slice(WEBDAV_ENDPOINT.length);
+  let destination = "";
+  try {
+    destination = normalizeDestinationPath(destinationHeader, request);
+  } catch (error) {
+    return error instanceof Response
+      ? error
+      : new Response("Bad Request", { status: 400 });
+  }
 
   if (
     destination === path ||
@@ -31,16 +56,27 @@ export async function handleRequestCopy({
 
   // Check if the destination already exists
   const destinationExists = await bucket.head(destination);
-  if (dontOverwrite && destinationExists)
+  const sourceIsDirectory =
+    src.httpMetadata?.contentType === "application/x-directory";
+
+  if (dontOverwrite && destinationExists) {
     return new Response("Precondition Failed", { status: 412 });
+  }
+
+  if (
+    sourceIsDirectory &&
+    destinationExists &&
+    destinationExists.httpMetadata?.contentType === "application/x-directory"
+  ) {
+    return new Response("Conflict", { status: 409 });
+  }
+
   await bucket.put(destination, src.body, {
     httpMetadata: src.httpMetadata,
     customMetadata: src.customMetadata,
   });
 
-  const isDirectory =
-    src.httpMetadata?.contentType === "application/x-directory";
-  if (isDirectory) {
+  if (sourceIsDirectory) {
     const depth = request.headers.get("Depth") ?? "infinity";
     switch (depth) {
       case "0":
@@ -49,9 +85,9 @@ export async function handleRequestCopy({
         const prefix = path + "/";
         const copy = async (object: R2Object) => {
           const target = `${destination}/${object.key.slice(prefix.length)}`;
-          const src = await bucket.get(object.key);
-          if (src === null) return;
-          await bucket.put(target, src.body, {
+          const srcObject = await bucket.get(object.key);
+          if (srcObject === null) return;
+          await bucket.put(target, srcObject.body, {
             httpMetadata: object.httpMetadata,
             customMetadata: object.customMetadata,
           });

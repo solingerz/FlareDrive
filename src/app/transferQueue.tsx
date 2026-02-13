@@ -88,6 +88,7 @@ export function TransferQueueProvider({
       })
       .catch((error) => {
         setTransferTasks(currentTaskUpdater({ status: "failed", error }));
+        taskProcessing.current = null;
       });
   }, [transferTasks]);
 

@@ -166,6 +166,7 @@ export async function multipartUpload(
     headers,
     method: "POST",
   });
+  if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
   const { uploadId } = await uploadResponse.json<{ uploadId: string }>();
   const totalChunks = Math.ceil(file.size / SIZE_LIMIT);
 
@@ -206,6 +207,7 @@ export async function multipartUpload(
           })
           .catch(uploadPart);
       const response = await [1, 2].reduce(retryReducer, uploadPart());
+      if (!response.ok) throw new Error(await response.text());
       return { partNumber: i, etag: response.headers.get("etag")! };
     })
   );
@@ -225,10 +227,13 @@ export async function copyPaste(source: string, target: string, move = false) {
     `${WEBDAV_ENDPOINT}${encodeKey(target)}`,
     window.location.href
   );
-  await fetch(uploadUrl, {
+  const res = await fetch(uploadUrl, {
     method: move ? "MOVE" : "COPY",
     headers: { Destination: destinationUrl.href },
   });
+  if (!res.ok) {
+    throw new Error(await res.text() || `Failed to ${move ? "move" : "copy"}`);
+  }
 }
 
 export async function createFolder(cwd: string) {
@@ -241,9 +246,11 @@ export async function createFolder(cwd: string) {
     }
     const folderKey = `${cwd}${folderName}`;
     const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
-    await fetch(uploadUrl, { method: "MKCOL" });
+    const res = await fetch(uploadUrl, { method: "MKCOL" });
+    if (!res.ok) throw new Error(await res.text() || "Create folder failed");
   } catch (error) {
-    console.log(`Create folder failed`);
+    console.error("Create folder failed", error);
+    throw error;
   }
 }
 
@@ -291,11 +298,13 @@ export async function processTransferTask({
     });
   } else {
     const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(remoteKey)}`;
-    return await xhrFetch(uploadUrl, {
+    const response = await xhrFetch(uploadUrl, {
       method: "PUT",
       headers,
       body: file,
       onUploadProgress: onTaskProgress,
     });
+    if (!response.ok) throw new Error(await response.text());
+    return response;
   }
 }
