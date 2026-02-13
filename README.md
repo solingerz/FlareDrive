@@ -1,6 +1,6 @@
 # FlareDrive
 
-Cloudflare R2 storage manager with Pages and Workers. Free 10 GB storage.
+Cloudflare R2 storage manager powered by a single Cloudflare Worker. Free 10 GB storage.
 Free serverless backend with a limit of 100,000 invocation requests per day.
 [More about pricing](https://developers.cloudflare.com/r2/platform/pricing/)
 
@@ -26,22 +26,25 @@ Before starting, you should make sure that
 
 Steps:
 
-1. Fork this project and connect your fork with Cloudflare Pages
-   - Select `Docusaurus` framework preset
-   - Set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`
-   - (Optional) Set `WEBDAV_PUBLIC_READ` to `1` to enable public read
-   - (Optional) Set `SHARE_ENABLED` to `true` to enable file sharing feature
-   - (Optional) Set `SHARE_DEFAULT_EXPIRE_SECONDS` to customize share link expiration time (default: 3600 seconds / 1 hour)
-2. After initial deployment, bind your R2 bucket to `BUCKET` variable
-3. (Optional) If you enabled file sharing, create a KV namespace and bind it to `SHARE_KV` variable
-4. Retry deployment in `Deployments` page to apply the changes
-5. (Optional) Add a custom domain
+1. Install dependencies
+   - `npm install`
+2. Configure Worker bindings in `wrangler.toml`
+   - Bind your R2 bucket to `BUCKET`
+   - (Optional) Bind KV to `SHARE_KV` for file sharing
+3. Set runtime secrets / vars in Worker
+   - Required: `WEBDAV_USERNAME`, `WEBDAV_PASSWORD`
+   - Optional: `WEBDAV_PUBLIC_READ=1`
+   - Optional: `SHARE_ENABLED=true`
+   - Optional: `SHARE_DEFAULT_EXPIRE_SECONDS=3600`
+4. Deploy
+   - `npm run deploy`
+5. (Optional) Add a custom domain to the Worker
 
-You can also deploy this project using Wrangler CLI:
+Local development:
 
 ```bash
-npm run build
-npx wrangler pages deploy build
+npm run build:app
+npm run dev:worker
 ```
 
 ### WebDAV endpoint
@@ -64,7 +67,7 @@ If you have enabled the file sharing feature by setting `SHARE_ENABLED` to `true
 - Creating a new share link for a file will invalidate any existing share link for that file
 - Share links automatically expire after the configured time period
 
-**Note**: The file sharing feature requires a KV namespace binding (`SHARE_KV`). Make sure to create and bind a KV namespace in your Cloudflare Pages settings.
+**Note**: The file sharing feature requires a KV namespace binding (`SHARE_KV`).
 
 ## Acknowledgments
 

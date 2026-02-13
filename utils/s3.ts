@@ -1,11 +1,13 @@
-function arrayBufferToHex(arrayBuffer: ArrayBuffer) {
+function arrayBufferToHex(arrayBuffer: ArrayBufferLike) {
   return [...new Uint8Array(arrayBuffer)]
     .map((x) => x.toString(16).padStart(2, "0"))
     .join("");
 }
 
-async function hmacSHA256(secret: ArrayBuffer, message: string | ArrayBuffer) {
-  if (typeof message === "string") message = new TextEncoder().encode(message);
+async function hmacSHA256(secret: BufferSource, message: string | BufferSource) {
+  if (typeof message === "string") {
+    message = new TextEncoder().encode(message);
+  }
   const key = await crypto.subtle.importKey(
     "raw",
     secret,
@@ -33,11 +35,12 @@ export class S3Client {
     const url = new URL(input);
     const objectKey = decodeURI(url.pathname);
     const method = init.method || "GET";
-    const canonicalQueryString = Array.from(url.searchParams.entries())
-      .map(
-        ([key, value]) =>
-          encodeURIComponent(key) + "=" + encodeURIComponent(value)
-      )
+    const searchEntries: Array<[string, string]> = [];
+    url.searchParams.forEach((value, key) => {
+      searchEntries.push([key, value]);
+    });
+    const canonicalQueryString = searchEntries
+      .map(([key, value]) => encodeURIComponent(key) + "=" + encodeURIComponent(value))
       .join("&");
     const hashedPayload = "UNSIGNED-PAYLOAD";
     const headers = new Headers(init.headers);
@@ -45,12 +48,16 @@ export class S3Client {
     headers.set("x-amz-date", datetime);
     headers.set("x-amz-content-sha256", hashedPayload);
     headers.set("host", url.host);
-    const signedHeaderKeys = Array.from(headers.entries()).map(([k]) => k).filter(
-      (header) =>
-        header === "host" ||
-        header === "content-type" ||
-        header.startsWith("x-amz-")
-    );
+    const signedHeaderKeys: string[] = [];
+    headers.forEach((_, key) => {
+      if (
+        key === "host" ||
+        key === "content-type" ||
+        key.startsWith("x-amz-")
+      ) {
+        signedHeaderKeys.push(key);
+      }
+    });
     const canonicalHeaders = signedHeaderKeys
       .map((key) => `${key}:${headers.get(key)}\n`)
       .join("");
