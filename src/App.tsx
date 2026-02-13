@@ -8,10 +8,10 @@ import {
 } from "@mui/material";
 import React, { useState } from "react";
 
-import Header from "./Header";
-import Main from "./Main";
-import ProgressDialog from "./ProgressDialog";
-import { TransferQueueProvider } from "./app/transferQueue";
+import Header from "./components/Header";
+import Main from "./components/Main";
+import ProgressDialog from "./components/ProgressDialog";
+import { TransferQueueProvider } from "./features/transfer/transferQueue";
 
 const globalStyles = (
   <GlobalStyles styles={{ "html, body, #root": { height: "100%" } }} />

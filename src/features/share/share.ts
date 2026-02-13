@@ -2,11 +2,25 @@ interface ShareRequest {
   filePath: string;
 }
 
+interface ShareStatusResponse {
+  enabled: boolean;
+}
+
 interface ShareResponse {
   shareUrl: string;
   expireTime: string;
   expireSeconds: number;
   fileName: string;
+}
+
+export async function getShareStatus(): Promise<boolean> {
+  const res = await fetch("/api/share/status", {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) return false;
+  const data = (await res.json()) as ShareStatusResponse;
+  return Boolean(data.enabled);
 }
 
 export async function createShareLink(
@@ -32,12 +46,6 @@ export async function createShareLink(
   return res.json();
 }
 
-export async function generateShareData(
-  filePath: string
-): Promise<ShareResponse> {
-  return await createShareLink(filePath);
-}
-
 export async function systemShare(shareData: ShareResponse): Promise<void> {
   const expireTime = new Date(shareData.expireTime).toLocaleString();
   const message =
@@ -59,7 +67,7 @@ export async function systemShare(shareData: ShareResponse): Promise<void> {
           url: shareData.shareUrl,
         });
         return;
-      } catch (err) {
+      } catch {
       }
     }
     

@@ -1,78 +1,142 @@
 # FlareDrive
 
-Cloudflare R2 storage manager powered by a single Cloudflare Worker. Free 10 GB storage.
-Free serverless backend with a limit of 100,000 invocation requests per day.
-[More about pricing](https://developers.cloudflare.com/r2/platform/pricing/)
+FlareDrive is a Cloudflare Worker + R2 based WebDAV drive with a React web UI.
+
+It provides:
+- Standard WebDAV access for common clients
+- Browser uploads with multipart support for large files
+- Optional temporary share links backed by KV
+- Upload integrity headers (`fd-sha256` / `x-fd-sha256`)
+
+## Architecture
+
+- Frontend: React + Vite (`src/components`, `src/features`)
+- Worker entry: `src/worker.ts`
+- WebDAV / HTTP handlers: `src/webdav`
+- Storage: Cloudflare R2 binding (`BUCKET`)
+- Share metadata: Cloudflare KV binding (`SHARE_KV`, optional)
 
 ## Features
 
-- Upload large files
-- Create folders
-- Search files
-- Image/video/PDF thumbnails
-- File sharing with expirable links
-- WebDAV endpoint
-- Drag and drop upload
+- File list, search, create folder, move/copy/delete
+- Drag-and-drop uploads
+- Multipart uploads for large files
+- Thumbnail metadata support
+- Temporary share links with expiration
+- WebDAV protocol endpoints under `/webdav`
 
-## Usage
+## Quick Start
 
-### Installation
+### Prerequisites
 
-Before starting, you should make sure that
+- Cloudflare account
+- R2 enabled with at least one bucket
+- Node.js and npm
 
-- you have created a [Cloudflare](https://dash.cloudflare.com/) account
-- your payment method is added
-- R2 service is activated and at least one bucket is created
+### Install
 
-Steps:
+```bash
+npm install
+```
 
-1. Install dependencies
-   - `npm install`
-2. Configure Worker bindings in `wrangler.toml`
-   - Bind your R2 bucket to `BUCKET`
-   - (Optional) Bind KV to `SHARE_KV` for file sharing
-3. Set runtime secrets / vars in Worker
-   - Required: `WEBDAV_USERNAME`, `WEBDAV_PASSWORD`
-   - Optional: `WEBDAV_PUBLIC_READ=1`
-   - Optional: `SHARE_ENABLED=true`
-   - Optional: `SHARE_DEFAULT_EXPIRE_SECONDS=3600`
-4. Deploy
-   - `npm run deploy`
-5. (Optional) Add a custom domain to the Worker
+### Configure
 
-Local development:
+1. Copy `wrangler.jsonc.example` to your Wrangler config file and fill bindings.
+2. Set secrets for authentication:
+
+```bash
+wrangler secret put WEBDAV_USERNAME
+wrangler secret put WEBDAV_PASSWORD
+```
+
+3. Optional local development variables: copy `.dev.vars.example` to `.dev.vars`.
+
+### Run Locally
 
 ```bash
 npm run build:app
 npm run dev:worker
 ```
 
-### WebDAV endpoint
+### Deploy
 
-You can use any client (such as [Cx File Explorer](https://play.google.com/store/apps/details?id=com.cxinventor.file.explorer), [BD File Manager](https://play.google.com/store/apps/details?id=com.liuzho.file.explorer))
-that supports the WebDAV protocol to access your files.
-Fill the endpoint URL as `https://<your-domain.com>/webdav` and use the username and password you set.
+```bash
+npm run deploy
+```
 
-However, the standard WebDAV protocol does not support large file (≥128MB) uploads due to the limitation of Cloudflare Workers.
-You must upload large files through the web interface which supports chunked uploads.
+## Configuration
 
-### File Sharing
+### Required Bindings
 
-If you have enabled the file sharing feature by setting `SHARE_ENABLED` to `true`, you can create temporary share links for your files:
+- `ASSETS`: static frontend assets binding
+- `BUCKET`: R2 bucket binding for file storage
 
-- Share links are generated through the web interface
-- Each share link has an expiration time (default: 1 hour, configurable via `SHARE_DEFAULT_EXPIRE_SECONDS`)
-- Share links are accessible at `https://<your-domain.com>/s/<token>`
-- Only one active share link can exist per file at a time
-- Creating a new share link for a file will invalidate any existing share link for that file
-- Share links automatically expire after the configured time period
+### Optional Bindings
 
-**Note**: The file sharing feature requires a KV namespace binding (`SHARE_KV`).
+- `SHARE_KV`: KV namespace for share links
+
+### Environment Variables
+
+| Name | Required | Default | Description |
+| --- | --- | --- | --- |
+| `WEBDAV_USERNAME` | Yes | - | Basic Auth username |
+| `WEBDAV_PASSWORD` | Yes | - | Basic Auth password |
+| `WEBDAV_PUBLIC_READ` | No | `false` | Allow unauthenticated `GET`/`HEAD`/`PROPFIND` |
+| `SHARE_ENABLED` | No | `false` | Enable `/api/share` and `/s/<token>` |
+| `SHARE_DEFAULT_EXPIRE_SECONDS` | No | `3600` | Share-link TTL in seconds |
+
+## Upload Integrity Header
+
+FlareDrive uses `fd-sha256` (client-provided SHA-256) and `x-fd-sha256` (server response) to validate uploads.
+
+- Worker accepts `fd-sha256` for uploads.
+- Worker returns `x-fd-sha256` using client-provided checksum when present.
+- Server-side checksum mismatch blocking is disabled.
+
+## WebDAV
+
+Endpoint:
+- `https://<your-domain>/webdav`
+
+Notes:
+- Uses standard WebDAV paths.
+- Typical operations (`PROPFIND`, `GET`, `PUT`, `DELETE`, `COPY`, `MOVE`, `MKCOL`) are supported.
+- Large uploads are handled by the web UI multipart flow.
+
+## Sharing
+
+When `SHARE_ENABLED=true` and `SHARE_KV` is configured:
+
+- `POST /api/share` creates expiring links.
+- Download links are served via `/s/<token>`.
+- Only one active token is kept per file path.
+
+## Project Structure
+
+```text
+src/
+  components/            # UI components
+  features/              # Frontend feature modules (transfer/share)
+  webdav/                # Worker-side auth + WebDAV handlers
+  worker.ts              # Worker fetch entry
+  App.tsx
+  main.tsx
+```
+
+## Scripts
+
+- `npm run dev:app` start Vite dev server
+- `npm run build` build frontend assets
+- `npm run dev:worker` run Worker locally via Wrangler
+- `npm run typecheck:worker` type-check Worker code
+- `npm run deploy` build + deploy
+
+## Security Notes
+
+- Always use strong `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`.
+- Keep `WEBDAV_PUBLIC_READ=false` unless public read access is intentional.
+- Consider external rate-limiting controls in front of Basic Auth endpoints.
 
 ## Acknowledgments
 
-WebDAV related code is based on [r2-webdav](
-  https://github.com/abersheeran/r2-webdav
-) project by [abersheeran](
-  https://github.com/abersheeran
-).
+WebDAV-related implementation is based on [r2-webdav](https://github.com/abersheeran/r2-webdav) by [abersheeran](https://github.com/abersheeran).

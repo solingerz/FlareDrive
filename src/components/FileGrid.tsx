@@ -7,7 +7,7 @@ import {
   ListItemText,
 } from "@mui/material";
 import MimeIcon from "./MimeIcon";
-import { humanReadableSize } from "./app/utils";
+import { humanReadableSize } from "../features/transfer/utils";
 
 export interface FileItem {
   key: string;
@@ -55,12 +55,13 @@ function FileGrid({
                 onMultiSelect(file.key);
               } else if (isDirectory(file)) {
                 onCwdChange(file.key + "/");
-              } else
+              } else {
                 window.open(
                   `/webdav/${encodeKey(file.key)}`,
                   "_blank",
                   "noopener,noreferrer"
                 );
+              }
             }}
             onContextMenu={(e) => {
               e.preventDefault();

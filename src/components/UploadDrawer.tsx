@@ -7,8 +7,8 @@ import {
   Image as ImageIcon,
   Upload as UploadIcon,
 } from "@mui/icons-material";
-import { createFolder } from "./app/transfer";
-import { useUploadEnqueue } from "./app/transferQueue";
+import { createFolder } from "../features/transfer/transfer";
+import { useUploadEnqueue } from "../features/transfer/transferQueue";
 
 function IconCaptionButton({
   icon,
@@ -63,7 +63,7 @@ function UploadDrawer({
   open: boolean;
   setOpen: (open: boolean) => void;
   cwd: string;
-  onUpload: () => void;
+  onUpload?: () => void;
 }) {
   const uploadEnqueue = useUploadEnqueue();
 
@@ -89,11 +89,10 @@ function UploadDrawer({
         const files = Array.from(input.files);
         uploadEnqueue(...files.map((file) => ({ file, basedir: cwd })));
         setOpen(false);
-        onUpload();
       };
       input.click();
     },
-    [cwd, onUpload, setOpen, uploadEnqueue]
+    [cwd, setOpen, uploadEnqueue]
   );
 
   const takePhoto = useMemo(() => handleUpload("photo"), [handleUpload]);
@@ -137,7 +136,7 @@ function UploadDrawer({
               onClick={async () => {
                 setOpen(false);
                 await createFolder(cwd);
-                onUpload();
+                onUpload?.();
               }}
             />
           </Grid>

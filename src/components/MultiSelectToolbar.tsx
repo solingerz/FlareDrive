@@ -9,6 +9,7 @@ import {
 
 function MultiSelectToolbar({
   multiSelected,
+  shareEnabled,
   onClose,
   onDownload,
   onRename,
@@ -16,6 +17,7 @@ function MultiSelectToolbar({
   onShare,
 }: {
   multiSelected: string[] | null;
+  shareEnabled: boolean;
   onClose: () => void;
   onDownload: () => void;
   onRename: () => void;
@@ -71,7 +73,7 @@ function MultiSelectToolbar({
             {multiSelected.length === 1 && (
               <React.Fragment>
                 <MenuItem onClick={onRename}>Rename</MenuItem>
-                <MenuItem onClick={onShare}>Share</MenuItem>
+                {shareEnabled && <MenuItem onClick={onShare}>Share</MenuItem>}
               </React.Fragment>
             )}
           </Menu>

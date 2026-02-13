@@ -12,6 +12,8 @@ function Header({
   setShowProgressDialog: (show: boolean) => void;
 }) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [openProgressAfterMenuClose, setOpenProgressAfterMenuClose] =
+    useState(false);
 
   return (
     <Toolbar disableGutters sx={{ padding: 1 }}>
@@ -31,7 +33,10 @@ function Header({
         aria-label="More"
         color="inherit"
         sx={{ marginLeft: 0.5 }}
-        onClick={(e) => setAnchorEl(e.currentTarget)}
+        onClick={(e) => {
+          setOpenProgressAfterMenuClose(false);
+          setAnchorEl(e.currentTarget);
+        }}
       >
         <MoreHorizIcon />
       </IconButton>
@@ -39,13 +44,24 @@ function Header({
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={() => setAnchorEl(null)}
+        disableRestoreFocus={openProgressAfterMenuClose}
+        TransitionProps={{
+          onExited: () => {
+            if (!openProgressAfterMenuClose) return;
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur();
+            }
+            setShowProgressDialog(true);
+            setOpenProgressAfterMenuClose(false);
+          },
+        }}
       >
         <MenuItem>View as</MenuItem>
         <MenuItem>Sort by</MenuItem>
         <MenuItem
           onClick={() => {
+            setOpenProgressAfterMenuClose(true);
             setAnchorEl(null);
-            setShowProgressDialog(true);
           }}
         >
           Progress

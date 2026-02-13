@@ -16,7 +16,7 @@
     "start": "vite",
     "build": "vite build",
     "build:app": "vite build",
-    "dev:worker": "wrangler dev",
+    "dev:worker": "npx wrangler dev",
     "deploy": "npm run build:app && wrangler deploy",
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
     "preview": "vite preview"

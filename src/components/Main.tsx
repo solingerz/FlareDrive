@@ -1,5 +1,5 @@
 // Main.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Breadcrumbs,
@@ -10,13 +10,25 @@ import {
 } from "@mui/material";
 import { Home as HomeIcon, NoteAdd as NoteAddIcon } from "@mui/icons-material";
 
-import FileGrid, { encodeKey, FileItem, isDirectory } from "./FileGrid";
+import FileGrid, { FileItem, isDirectory } from "./FileGrid";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
-import { copyPaste, fetchPath } from "./app/transfer";
-import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
-import { systemShare, generateShareData } from "./app/share";
+import {
+  copyPaste,
+  deletePath,
+  downloadFile,
+  fetchPath,
+} from "../features/transfer/transfer";
+import {
+  useTransferQueue,
+  useUploadEnqueue,
+} from "../features/transfer/transferQueue";
+import {
+  systemShare,
+  createShareLink,
+  getShareStatus,
+} from "../features/share/share";
 
 // Centered helper
 function Centered({ children }: { children: React.ReactNode }) {
@@ -123,7 +135,8 @@ function Main({
   const [multiSelected, setMultiSelected] = useState<string[] | null>(null);
   const [showUploadDrawer, setShowUploadDrawer] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
-  const [lastUploadKey, setLastUploadKey] = useState<string | null>(null);
+  const [shareEnabled, setShareEnabled] = useState(false);
+  const hadActiveUploadsRef = useRef(false);
 
   const transferQueue = useTransferQueue();
   const uploadEnqueue = useUploadEnqueue();
@@ -145,15 +158,35 @@ function Main({
   }, [fetchFiles]);
 
   useEffect(() => {
-    if (!transferQueue.length) return;
-    const lastFile = transferQueue[transferQueue.length - 1];
-    if (["pending", "in-progress"].includes(lastFile.status)) {
-      setLastUploadKey(lastFile.remoteKey);
-    } else if (lastUploadKey) {
-      fetchFiles();
-      setLastUploadKey(null);
+    let canceled = false;
+    void getShareStatus()
+      .then((enabled) => {
+        if (!canceled) setShareEnabled(enabled);
+      })
+      .catch(() => {
+        if (!canceled) setShareEnabled(false);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const uploadTasks = transferQueue.filter((task) => task.type === "upload");
+    const hasActiveUploads = uploadTasks.some((task) =>
+      ["pending", "in-progress", "paused"].includes(task.status)
+    );
+
+    if (hasActiveUploads) {
+      hadActiveUploadsRef.current = true;
+      return;
     }
-  }, [cwd, fetchFiles, lastUploadKey, transferQueue]);
+
+    if (!hadActiveUploadsRef.current) return;
+    hadActiveUploadsRef.current = false;
+    fetchFiles();
+  }, [fetchFiles, transferQueue]);
 
   const filteredFiles = useMemo(
     () =>
@@ -233,18 +266,15 @@ function Main({
         open={showTextPadDrawer}
         setOpen={setShowTextPadDrawer}
         cwd={cwd}
-        onUpload={fetchFiles}
       />
 
       <MultiSelectToolbar
         multiSelected={multiSelected}
+        shareEnabled={shareEnabled}
         onClose={() => setMultiSelected(null)}
-        onDownload={() => {
+        onDownload={async () => {
           if (multiSelected?.length !== 1) return;
-          const a = document.createElement("a");
-          a.href = `/webdav/${encodeKey(multiSelected[0])}`;
-          a.download = multiSelected[0].split("/").pop()!;
-          a.click();
+          await downloadFile(multiSelected[0]);
         }}
         onRename={async () => {
           if (multiSelected?.length !== 1) return;
@@ -260,13 +290,12 @@ function Main({
             .join("\n");
           const confirmMessage = "Delete the following file(s) permanently?";
           if (!window.confirm(`${confirmMessage}\n${filenames}`)) return;
-          for (const key of multiSelected)
-            await fetch(`/webdav/${encodeKey(key)}`, { method: "DELETE" });
+          for (const key of multiSelected) await deletePath(key);
           fetchFiles();
         }}
         onShare={async () => {
           if (multiSelected?.length !== 1) return;
-          const data = await generateShareData(multiSelected[0]);
+          const data = await createShareLink(multiSelected[0]);
           await systemShare(data);
         }}
       />

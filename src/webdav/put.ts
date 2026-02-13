@@ -1,5 +1,23 @@
 import { RequestHandlerParams, ROOT_OBJECT } from "./utils";
 
+const FD_SHA256_HEADER = "fd-sha256";
+const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
+const THUMBNAIL_DIGEST_PATTERN = /^[a-f0-9]{40}$/i;
+
+function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function encodeArrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 async function handleRequestPutMultipart({
   bucket,
   path,
@@ -47,15 +65,40 @@ export async function handleRequestPut({
   }
 
   const thumbnail = request.headers.get("fd-thumbnail");
+  if (thumbnail && !THUMBNAIL_DIGEST_PATTERN.test(thumbnail)) {
+    return new Response("Invalid thumbnail digest", { status: 400 });
+  }
+  const expectedSha256Base64 = request.headers.get(FD_SHA256_HEADER)?.trim();
+  let expectedSha256: ArrayBuffer | undefined;
+  if (expectedSha256Base64) {
+    try {
+      expectedSha256 = decodeBase64ToArrayBuffer(expectedSha256Base64);
+    } catch {
+      return new Response("Invalid SHA-256 header", { status: 400 });
+    }
+  }
   const customMetadata = thumbnail ? { thumbnail } : undefined;
 
   const result = await bucket.put(path, request.body, {
     onlyIf: request.headers,
     httpMetadata: request.headers,
     customMetadata,
+    sha256: expectedSha256,
   });
 
   if (!result) return new Response("Preconditions failed", { status: 412 });
 
-  return new Response("", { status: 201 });
+  const actualSha256Base64 = result.checksums.sha256
+    ? encodeArrayBufferToBase64(result.checksums.sha256)
+    : undefined;
+
+  const headers = new Headers();
+  headers.set("etag", result.httpEtag);
+  if (expectedSha256Base64) {
+    headers.set(FD_RESULT_SHA256_HEADER, expectedSha256Base64);
+  } else if (actualSha256Base64) {
+    headers.set(FD_RESULT_SHA256_HEADER, actualSha256Base64);
+  }
+
+  return new Response("", { status: 201, headers });
 }

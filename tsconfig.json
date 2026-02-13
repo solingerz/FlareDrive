@@ -13,6 +13,6 @@
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*", "functions/**/*", "utils/**/*"],
-  "exclude": ["node_modules", "build", "Main.tsx", "TextPadDrawer.tsx", "BUG_AUDIT.md"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "build", "legacy/**/*", "BUG_AUDIT.md"]
 }

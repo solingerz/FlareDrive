@@ -1,12 +1,26 @@
 import { notFound } from "./utils";
 import { RequestHandlerParams } from "./utils";
 
+const FD_SHA256_HEADER = "fd-sha256";
+const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
+const THUMBNAIL_DIGEST_PATTERN = /^[a-f0-9]{40}$/i;
+
+function encodeArrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 export async function handleRequestPostCreateMultipart({
   bucket,
   path,
   request,
 }: RequestHandlerParams) {
   const thumbnail = request.headers.get("fd-thumbnail");
+  if (thumbnail && !THUMBNAIL_DIGEST_PATTERN.test(thumbnail)) {
+    return new Response("Invalid thumbnail digest", { status: 400 });
+  }
   const customMetadata = thumbnail ? { thumbnail } : undefined;
 
   const multipartUpload = await bucket.createMultipartUpload(path, {
@@ -26,14 +40,26 @@ export async function handleRequestPostCompleteMultipart({
   const url = new URL(request.url);
   const uploadId = new URLSearchParams(url.search).get("uploadId");
   if (!uploadId) return notFound();
+  const expectedSha256Base64 = request.headers.get(FD_SHA256_HEADER)?.trim();
   const multipartUpload = bucket.resumeMultipartUpload(path, uploadId);
 
   const completeBody: { parts: Array<any> } = await request.json();
 
   try {
     const object = await multipartUpload.complete(completeBody.parts);
+    const actualSha256Base64 = object.checksums.sha256
+      ? encodeArrayBufferToBase64(object.checksums.sha256)
+      : undefined;
+
+    const headers = new Headers({ etag: object.httpEtag });
+    if (expectedSha256Base64) {
+      headers.set(FD_RESULT_SHA256_HEADER, expectedSha256Base64);
+    } else if (actualSha256Base64) {
+      headers.set(FD_RESULT_SHA256_HEADER, actualSha256Base64);
+    }
+
     return new Response(null, {
-      headers: { etag: object.httpEtag },
+      headers,
     });
   } catch (error: any) {
     return new Response(error.message, { status: 400 });

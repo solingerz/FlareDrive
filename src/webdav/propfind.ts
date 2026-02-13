@@ -17,6 +17,15 @@ type DavProperties = {
   "fd:thumbnail": string | undefined;
 };
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 function fromR2Object(object: R2Object | typeof ROOT_OBJECT): DavProperties {
   return {
     creationdate: object.uploaded.toUTCString(),
@@ -89,7 +98,11 @@ export async function handleRequestPropfind({
       <prop>
         ${Object.entries(properties)
           .filter(([_, value]) => value !== undefined)
-          .map(([key, value]) => `<${key}>${value}</${key}>`)
+          .map(([key, value]) =>
+            key === "resourcetype"
+              ? `<${key}>${value}</${key}>`
+              : `<${key}>${escapeXml(String(value))}</${key}>`
+          )
           .join("\n")}
       </prop>
       <status>HTTP/1.1 200 OK</status>

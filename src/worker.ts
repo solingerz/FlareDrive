@@ -1,14 +1,14 @@
-import { handleRequestCopy } from "../functions/webdav/copy";
-import { handleRequestDelete } from "../functions/webdav/delete";
-import { handleRequestGet } from "../functions/webdav/get";
-import { handleRequestHead } from "../functions/webdav/head";
-import { handleRequestMkcol } from "../functions/webdav/mkcol";
-import { handleRequestMove } from "../functions/webdav/move";
-import { handleRequestPost } from "../functions/webdav/post";
-import { handleRequestPropfind } from "../functions/webdav/propfind";
-import { handleRequestPut } from "../functions/webdav/put";
-import { parseBucketPath } from "../functions/webdav/utils";
-import { requireAuth, requireAuthSimple } from "../utils/auth";
+import { requireAuth, requireAuthSimple } from "./webdav/auth";
+import { handleRequestCopy } from "./webdav/copy";
+import { handleRequestDelete } from "./webdav/delete";
+import { handleRequestGet } from "./webdav/get";
+import { handleRequestHead } from "./webdav/head";
+import { handleRequestMkcol } from "./webdav/mkcol";
+import { handleRequestMove } from "./webdav/move";
+import { handleRequestPost } from "./webdav/post";
+import { handleRequestPropfind } from "./webdav/propfind";
+import { handleRequestPut } from "./webdav/put";
+import { parseBucketPath } from "./webdav/utils";
 
 type WorkerEnv = {
   ASSETS: Fetcher;
@@ -82,6 +82,23 @@ function generateShareToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function toAsciiFilenameFallback(fileName: string): string {
+  const normalized = fileName.normalize("NFKD");
+  const asciiOnly = normalized
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\]/g, "_")
+    .replace(/[/;:]/g, "_")
+    .trim();
+  return asciiOnly || "download";
+}
+
+function encodeContentDispositionFilenameStar(fileName: string): string {
+  return encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+}
+
 async function handleShareOptions() {
   return new Response(null, {
     headers: {
@@ -91,6 +108,18 @@ async function handleShareOptions() {
       "Access-Control-Max-Age": "86400",
     },
   });
+}
+
+async function handleShareStatus(env: WorkerEnv): Promise<Response> {
+  return new Response(
+    JSON.stringify({ enabled: env.SHARE_ENABLED === "true" }),
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
+    }
+  );
 }
 
 async function handleSharePost(request: Request, env: WorkerEnv): Promise<Response> {
@@ -174,10 +203,11 @@ async function handleShareDownload(pathname: string, env: WorkerEnv): Promise<Re
   if (!obj) return new Response("File not found", { status: 404 });
 
   const fileName = filePath.split("/").pop() || "file";
-  const encodedName = encodeURIComponent(fileName);
+  const asciiFallbackName = toAsciiFilenameFallback(fileName);
+  const encodedName = encodeContentDispositionFilenameStar(fileName);
   const headers = new Headers({
     "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
-    "Content-Disposition": `attachment; filename="${fileName.replace(/"/g, "")}"; filename*=UTF-8''${encodedName}`,
+    "Content-Disposition": `attachment; filename="${asciiFallbackName}"; filename*=UTF-8''${encodedName}`,
     "Cache-Control": "no-store",
   });
   if (obj.size) headers.set("Content-Length", `${obj.size}`);
@@ -191,7 +221,7 @@ async function handleWebdavRequest(request: Request, env: WorkerEnv): Promise<Re
   const authError = requireAuth(request, {
     username: env.WEBDAV_USERNAME,
     password: env.WEBDAV_PASSWORD,
-    publicRead: env.WEBDAV_PUBLIC_READ === "1",
+    publicRead: env.WEBDAV_PUBLIC_READ === "true",
   });
   if (authError) return authError;
 
@@ -201,16 +231,18 @@ async function handleWebdavRequest(request: Request, env: WorkerEnv): Promise<Re
   if (!bucket) return new Response("Not found", { status: 404 });
 
   const handler = WEBDAV_HANDLERS[request.method] ?? methodNotAllowed;
-  const params: RequestHandlerParams = { bucket, path, request };
-  if (request.method === "DELETE" || request.method === "MOVE") {
-    params.env = env;
-  }
+  const params: RequestHandlerParams = { bucket, path, request, env };
   return handler(params);
 }
 
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const pathname = new URL(request.url).pathname;
+
+    if (pathname === "/api/share/status") {
+      if (request.method === "GET") return handleShareStatus(env);
+      return methodNotAllowed();
+    }
 
     if (pathname === "/api/share") {
       if (request.method === "OPTIONS") return handleShareOptions();

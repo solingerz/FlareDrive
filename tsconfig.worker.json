@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/worker.ts", "functions/**/*", "utils/**/*"]
+  "include": ["src/worker.ts", "src/webdav/**/*"]
 }
