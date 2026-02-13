@@ -91,7 +91,6 @@ FlareDrive uses `fd-sha256` (client-provided SHA-256) and `x-fd-sha256` (server 
 
 - Worker accepts `fd-sha256` for uploads.
 - Worker returns `x-fd-sha256` using client-provided checksum when present.
-- Server-side checksum mismatch blocking is disabled.
 
 ## WebDAV
 
