@@ -33,7 +33,7 @@ export class S3Client {
     const url = new URL(input);
     const objectKey = decodeURI(url.pathname);
     const method = init.method || "GET";
-    const canonicalQueryString = [...url.searchParams]
+    const canonicalQueryString = Array.from(url.searchParams.entries())
       .map(
         ([key, value]) =>
           encodeURIComponent(key) + "=" + encodeURIComponent(value)
@@ -45,7 +45,7 @@ export class S3Client {
     headers.set("x-amz-date", datetime);
     headers.set("x-amz-content-sha256", hashedPayload);
     headers.set("host", url.host);
-    const signedHeaderKeys = [...headers.keys()].filter(
+    const signedHeaderKeys = Array.from(headers.entries()).map(([k]) => k).filter(
       (header) =>
         header === "host" ||
         header === "content-type" ||

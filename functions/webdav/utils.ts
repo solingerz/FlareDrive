@@ -48,8 +48,9 @@ export function parseBucketPath(context: any): [R2Bucket, string] {
   const bucket = env[driveid] || env["BUCKET"];
   if (!bucket) throw new Response("Unknown bucket", { status: 400 });
 
-  const path = safeJoin((params.path || []) as string[]);
-  return [bucket as R2Bucket, path];
+  const rawParts = (params.path || []) as string[];
+  const normalizedPath = safeJoin(rawParts);
+  return [bucket as R2Bucket, normalizedPath];
 }
 
 export async function* listAll(

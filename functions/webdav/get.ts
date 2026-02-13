@@ -34,7 +34,11 @@ function addUtf8Charset(contentType: string): string {
   return contentType + '; charset=utf-8';
 }
 
-async function addHtmlCharset(content: ReadableStream): Promise<ReadableStream> {
+const MAX_HTML_REWRITE_SIZE = 1024 * 1024;
+
+async function addHtmlCharset(content: ReadableStream, contentLength: number | null): Promise<ReadableStream> {
+  if (contentLength !== null && contentLength > MAX_HTML_REWRITE_SIZE) return content;
+
   const reader = content.getReader();
   const decoder = new TextDecoder('utf-8');
   let html = '';
@@ -107,7 +111,11 @@ export async function handleRequestGet({
     headers.set('Content-Type', contentType);
     
     if (contentType.toLowerCase().includes('text/html') && obj.body) {
-      const bodyWithCharset = await addHtmlCharset(obj.body);
+      const contentLength = Number(headers.get("Content-Length"));
+      const bodyWithCharset = await addHtmlCharset(
+        obj.body,
+        Number.isFinite(contentLength) ? contentLength : null
+      );
       if (path.startsWith("_$flaredrive$/thumbnails/"))
         headers.set("Cache-Control", "max-age=31536000");
       return new Response(bodyWithCharset, { headers });
