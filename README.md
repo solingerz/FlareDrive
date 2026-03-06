@@ -41,7 +41,10 @@ npm install
 
 ### Configure
 
-1. Copy `wrangler.jsonc.example` to your Wrangler config file and fill bindings.
+1. Edit `wrangler.jsonc` and configure your bindings:
+   - Uncomment and fill `r2_buckets` with your R2 bucket using the `BUCKET` binding name.
+   - If you enable sharing, uncomment and fill `kv_namespaces` with the `SHARE_KV` binding.
+   - `wrangler.jsonc.example` shows the same structure with example values.
 2. Set secrets for authentication:
 
 ```bash
