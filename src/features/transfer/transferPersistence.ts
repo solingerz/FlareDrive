@@ -215,7 +215,7 @@ export async function loadPersistedUploadTasks(): Promise<TransferTask[]> {
           updatedAt: meta.updatedAt,
         } satisfies TransferTask;
       })
-      .filter((task): task is TransferTask => task !== null)
+      .filter((task) => task !== null)
       .sort((a, b) => a.createdAt - b.createdAt);
   } catch {
     return [];

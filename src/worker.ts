@@ -76,6 +76,32 @@ function methodNotAllowed() {
   return new Response(null, { status: 405 });
 }
 
+function isJsonContentType(contentType: string | null): boolean {
+  return contentType?.split(";", 1)[0].trim().toLowerCase() === "application/json";
+}
+
+function validateSharePostRequest(request: Request): Response | null {
+  const requestOrigin = new URL(request.url).origin;
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== requestOrigin) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  if (request.headers.get("Sec-Fetch-Site") === "cross-site") {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  if (!isJsonContentType(request.headers.get("Content-Type"))) {
+    return new Response("Content-Type must be application/json", { status: 415 });
+  }
+
+  if (request.headers.get("X-FlareDrive-Action") !== "share") {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  return null;
+}
+
 function generateShareToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -101,11 +127,9 @@ function encodeContentDispositionFilenameStar(fileName: string): string {
 
 async function handleShareOptions() {
   return new Response(null, {
+    status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Max-Age": "86400",
+      Allow: "POST, OPTIONS",
     },
   });
 }
@@ -123,6 +147,9 @@ async function handleShareStatus(env: WorkerEnv): Promise<Response> {
 }
 
 async function handleSharePost(request: Request, env: WorkerEnv): Promise<Response> {
+  const requestError = validateSharePostRequest(request);
+  if (requestError) return requestError;
+
   const authError = requireAuthSimple(
     request,
     env.WEBDAV_USERNAME,
@@ -135,8 +162,18 @@ async function handleSharePost(request: Request, env: WorkerEnv): Promise<Respon
   }
 
   try {
-    const body = (await request.json()) as { filePath?: string };
-    const filePath = body?.filePath;
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!rawBody || typeof rawBody !== "object") {
+      return new Response("filePath is required", { status: 400 });
+    }
+    const body = rawBody as Record<string, unknown>;
+    const filePath = typeof body.filePath === "string" ? body.filePath : "";
     if (!filePath) return new Response("filePath is required", { status: 400 });
 
     const bucket = env.BUCKET;
@@ -173,16 +210,13 @@ async function handleSharePost(request: Request, env: WorkerEnv): Promise<Respon
       {
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
           "Cache-Control": "no-store",
         },
       }
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Internal server error";
-    return new Response(message, { status: 500 });
+    console.error("Share API error", error);
+    return new Response("Internal server error", { status: 500 });
   }
 }
 

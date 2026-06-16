@@ -1,4 +1,4 @@
-import { notFound } from "./utils";
+import { isInternalPath, notFound } from "./utils";
 import { listAll, RequestHandlerParams } from "./utils";
 
 export async function handleRequestDelete({
@@ -6,6 +6,10 @@ export async function handleRequestDelete({
   path,
   env,
 }: RequestHandlerParams) {
+  if (isInternalPath(path)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const kv = env?.SHARE_KV;
   
   if (path !== "") {

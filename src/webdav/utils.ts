@@ -7,6 +7,17 @@ export interface RequestHandlerParams {
 
 export const WEBDAV_ENDPOINT = "/webdav/";
 
+const INTERNAL_PREFIX = "_$flaredrive$/";
+const THUMBNAIL_PATH_PATTERN = /^_\$flaredrive\$\/thumbnails\/[a-f0-9]{40}\.png$/i;
+
+export function isInternalPath(path: string): boolean {
+  return path === "_$flaredrive$" || path.startsWith(INTERNAL_PREFIX);
+}
+
+export function isThumbnailPath(path: string): boolean {
+  return THUMBNAIL_PATH_PATTERN.test(path);
+}
+
 export const ROOT_OBJECT = {
   key: "",
   uploaded: new Date(),
@@ -69,7 +80,7 @@ export async function* listAll(
     });
 
     for await (const obj of r2Objects.objects)
-      if (!obj.key.startsWith("_$flaredrive$/")) yield obj;
+      if (!isInternalPath(obj.key)) yield obj;
 
     if (r2Objects.truncated) cursor = r2Objects.cursor;
   } while (r2Objects.truncated);

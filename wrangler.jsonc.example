@@ -20,6 +20,12 @@
   "observability": {
     "enabled": false
   },
+  "routes": [
+    {
+      "pattern": "drive.example.com/*",
+      "zone_name": "example.com"
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "BUCKET",

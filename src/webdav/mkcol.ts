@@ -1,9 +1,13 @@
-import { RequestHandlerParams, ROOT_OBJECT } from "./utils";
+import { isInternalPath, RequestHandlerParams, ROOT_OBJECT } from "./utils";
 
 export async function handleRequestMkcol({
   bucket,
   path,
 }: RequestHandlerParams) {
+  if (isInternalPath(path)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   // Check if the resource already exists
   const resource = await bucket.head(path);
   if (resource !== null) {

@@ -1,5 +1,26 @@
-import { notFound } from "./utils";
-import { RequestHandlerParams } from "./utils";
+import {
+  isInternalPath,
+  isThumbnailPath,
+  notFound,
+  RequestHandlerParams,
+} from "./utils";
+
+function toAsciiFilenameFallback(fileName: string): string {
+  const normalized = fileName.normalize("NFKD");
+  const asciiOnly = normalized
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\]/g, "_")
+    .replace(/[/;:]/g, "_")
+    .trim();
+  return asciiOnly || "download";
+}
+
+function encodeContentDispositionFilenameStar(fileName: string): string {
+  return encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+}
 
 function isTextFile(contentType: string, path: string): boolean {
   const textTypes = [
@@ -93,6 +114,10 @@ export async function handleRequestGet({
   path,
   request,
 }: RequestHandlerParams) {
+  if (isInternalPath(path) && !isThumbnailPath(path)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const obj = await bucket.get(path, {
     onlyIf: request.headers,
     range: request.headers,
@@ -103,7 +128,17 @@ export async function handleRequestGet({
 
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
-  
+  headers.set("Cache-Control", "no-cache");
+
+  const fileName = path.split("/").pop() || "file";
+  const asciiName = toAsciiFilenameFallback(fileName);
+  const encodedName = encodeContentDispositionFilenameStar(fileName);
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`
+  );
+  headers.set("Content-Security-Policy", "default-src 'none'; sandbox");
+
   let contentType = headers.get('Content-Type') || 'application/octet-stream';
   
   if (isTextFile(contentType, path)) {

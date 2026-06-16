@@ -1,4 +1,9 @@
-import { RequestHandlerParams, ROOT_OBJECT } from "./utils";
+import {
+  isInternalPath,
+  isThumbnailPath,
+  RequestHandlerParams,
+  ROOT_OBJECT,
+} from "./utils";
 
 const FD_SHA256_HEADER = "fd-sha256";
 const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
@@ -47,6 +52,10 @@ export async function handleRequestPut({
   path,
   request,
 }: RequestHandlerParams) {
+  if (isInternalPath(path) && !isThumbnailPath(path)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const searchParams = new URLSearchParams(new URL(request.url).search);
   if (searchParams.has("uploadId")) {
     return handleRequestPutMultipart({ bucket, path, request });

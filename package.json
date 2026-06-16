@@ -8,18 +8,16 @@
     "@mui/icons-material": "^5.18.0",
     "@mui/material": "^5.18.0",
     "p-limit": "^6.2.0",
+    "pdfjs-dist": "^6.0.227",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "scripts": {
-    "dev:app": "vite",
-    "start": "vite",
+    "dev": "npx wrangler dev",
     "build": "vite build",
-    "build:app": "vite build",
-    "dev:worker": "npx wrangler dev",
-    "deploy": "npm run build:app && wrangler deploy",
+    "deploy": "npm run build && wrangler deploy",
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
-    "preview": "vite preview"
+    "preview": "npx wrangler preview"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260616.1",

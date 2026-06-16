@@ -26,3 +26,6 @@ yarn-error.log*
 /.wrangler
 .dev.vars
 wrangler.jsonc
+
+.agents
+.codex

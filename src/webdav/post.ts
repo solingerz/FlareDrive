@@ -1,5 +1,4 @@
-import { notFound } from "./utils";
-import { RequestHandlerParams } from "./utils";
+import { isInternalPath, notFound, RequestHandlerParams } from "./utils";
 
 const FD_SHA256_HEADER = "fd-sha256";
 const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
@@ -45,8 +44,19 @@ export async function handleRequestPostCompleteMultipart({
 
   const completeBody: { parts: Array<any> } = await request.json();
 
+  if (!completeBody || typeof completeBody !== "object") {
+    return new Response("Bad Request", { status: 400 });
+  }
+
+  const { parts } = completeBody;
+  if (!Array.isArray(parts) || !parts.every(
+    (p: any) => p && typeof p === "object" && typeof p.partNumber === "number" && typeof p.etag === "string"
+  )) {
+    return new Response("Bad Request", { status: 400 });
+  }
+
   try {
-    const object = await multipartUpload.complete(completeBody.parts);
+    const object = await multipartUpload.complete(parts);
     const actualSha256Base64 = object.checksums.sha256
       ? encodeArrayBufferToBase64(object.checksums.sha256)
       : undefined;
@@ -62,7 +72,8 @@ export async function handleRequestPostCompleteMultipart({
       headers,
     });
   } catch (error: any) {
-    return new Response(error.message, { status: 400 });
+    console.error("Multipart complete failed", error);
+    return new Response("Invalid multipart upload", { status: 400 });
   }
 }
 
@@ -71,6 +82,10 @@ export const handleRequestPost = async function ({
   path,
   request,
 }: RequestHandlerParams) {
+  if (isInternalPath(path)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const url = new URL(request.url);
   const searchParams = new URLSearchParams(url.search);
 

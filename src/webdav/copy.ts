@@ -2,6 +2,7 @@ import pLimit from "p-limit";
 
 import { notFound } from "./utils";
 import {
+  isInternalPath,
   listAll,
   RequestHandlerParams,
   WEBDAV_ENDPOINT,
@@ -45,6 +46,10 @@ export async function handleRequestCopy({
     return error instanceof Response
       ? error
       : new Response("Bad Request", { status: 400 });
+  }
+
+  if (isInternalPath(destination)) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   if (

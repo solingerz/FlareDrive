@@ -34,6 +34,7 @@ export async function createShareLink(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-FlareDrive-Action': 'share',
     },
     body: JSON.stringify(payload),
   });

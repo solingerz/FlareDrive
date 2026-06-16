@@ -328,18 +328,17 @@ async function generateThumbnailOnMainThread(file: File): Promise<Blob> {
     );
     context.drawImage(video, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
   } else if (file.type === "application/pdf") {
-    const pdfjsLib = await import(
-      // @ts-ignore
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs"
-    );
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
-    const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url
+    ).href;
+    const pdf = await pdfjsLib.getDocument({ url: URL.createObjectURL(file) }).promise;
     const page = await pdf.getPage(1);
     const { width, height } = page.getViewport({ scale: 1 });
     const scale = THUMBNAIL_SIZE / Math.max(width, height);
     const viewport = page.getViewport({ scale });
-    const renderContext = { canvasContext: context, viewport };
+    const renderContext = { canvas, viewport };
     await page.render(renderContext).promise;
   }
 
@@ -547,7 +546,7 @@ async function createMultipartUpload({
     throw new Error((await response.text()) || `HTTP ${response.status}`);
   }
 
-  const { uploadId } = await response.json<{ uploadId: string }>();
+  const { uploadId } = (await response.json()) as { uploadId: string };
   if (!uploadId) throw new Error("Missing multipart upload ID");
   return uploadId;
 }
