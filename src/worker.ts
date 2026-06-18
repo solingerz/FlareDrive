@@ -8,7 +8,7 @@ import { handleRequestMove } from "./webdav/move";
 import { handleRequestPost } from "./webdav/post";
 import { handleRequestPropfind } from "./webdav/propfind";
 import { handleRequestPut } from "./webdav/put";
-import { parseBucketPath } from "./webdav/utils";
+import { isInternalPath, parseBucketPath } from "./webdav/utils";
 
 type WorkerEnv = {
   ASSETS: Fetcher;
@@ -32,6 +32,20 @@ type RequestHandlerParams = {
 type Handler = (context: RequestHandlerParams) => Promise<Response>;
 
 const WEBDAV_BASE = "/webdav";
+const WEBDAV_WRITE_METHODS = new Set([
+  "POST",
+  "PUT",
+  "COPY",
+  "MOVE",
+  "DELETE",
+  "MKCOL",
+]);
+
+type ShareRecord = {
+  filePath: string;
+  etag: string;
+  size: number;
+};
 
 const WEBDAV_HANDLERS: Record<string, Handler> = {
   PROPFIND: handleRequestPropfind,
@@ -80,6 +94,23 @@ function isJsonContentType(contentType: string | null): boolean {
   return contentType?.split(";", 1)[0].trim().toLowerCase() === "application/json";
 }
 
+function validateSameOriginBrowserWrite(request: Request): Response | null {
+  if (!WEBDAV_WRITE_METHODS.has(request.method)) return null;
+
+  const requestOrigin = new URL(request.url).origin;
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== requestOrigin) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  const fetchSite = request.headers.get("Sec-Fetch-Site");
+  if (fetchSite && fetchSite !== "same-origin") {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  return null;
+}
+
 function validateSharePostRequest(request: Request): Response | null {
   const requestOrigin = new URL(request.url).origin;
   const origin = request.headers.get("Origin");
@@ -125,6 +156,29 @@ function encodeContentDispositionFilenameStar(fileName: string): string {
   );
 }
 
+function normalizeShareFilePath(
+  request: Request,
+  env: WorkerEnv,
+  filePath: string
+): string | Response {
+  try {
+    const [, normalizedPath] = parseBucketPath({
+      request,
+      env: { BUCKET: env.BUCKET },
+      params: { path: filePath.split("/") },
+    });
+    if (!normalizedPath) return new Response("filePath is required", { status: 400 });
+    if (isInternalPath(normalizedPath)) {
+      return new Response("Forbidden", { status: 403 });
+    }
+    return normalizedPath;
+  } catch (error: unknown) {
+    return error instanceof Response
+      ? error
+      : new Response("Invalid filePath", { status: 400 });
+  }
+}
+
 async function handleShareOptions() {
   return new Response(null, {
     status: 204,
@@ -134,7 +188,63 @@ async function handleShareOptions() {
   });
 }
 
-async function handleShareStatus(env: WorkerEnv): Promise<Response> {
+function applySecurityHeaders(response: Response, request: Request): Response {
+  const headers = new Headers(response.headers);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "same-origin");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=()"
+  );
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' blob: data:",
+      "media-src 'self' blob:",
+      "connect-src 'self'",
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "manifest-src 'self'",
+    ].join("; ")
+  );
+
+  if (new URL(request.url).protocol === "https:") {
+    headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains"
+    );
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function handleAssetRequest(
+  request: Request,
+  env: WorkerEnv
+): Promise<Response> {
+  return applySecurityHeaders(await env.ASSETS.fetch(request), request);
+}
+
+async function handleShareStatus(request: Request, env: WorkerEnv): Promise<Response> {
+  const authError = requireAuthSimple(
+    request,
+    env.WEBDAV_USERNAME,
+    env.WEBDAV_PASSWORD
+  );
+  if (authError) return authError;
+
   return new Response(
     JSON.stringify({ enabled: env.SHARE_ENABLED === "true" }),
     {
@@ -173,8 +283,12 @@ async function handleSharePost(request: Request, env: WorkerEnv): Promise<Respon
       return new Response("filePath is required", { status: 400 });
     }
     const body = rawBody as Record<string, unknown>;
-    const filePath = typeof body.filePath === "string" ? body.filePath : "";
-    if (!filePath) return new Response("filePath is required", { status: 400 });
+    const rawFilePath = typeof body.filePath === "string" ? body.filePath : "";
+    if (!rawFilePath) return new Response("filePath is required", { status: 400 });
+
+    const normalizedFilePath = normalizeShareFilePath(request, env, rawFilePath);
+    if (normalizedFilePath instanceof Response) return normalizedFilePath;
+    const filePath = normalizedFilePath;
 
     const bucket = env.BUCKET;
     const kv = env.SHARE_KV;
@@ -183,6 +297,9 @@ async function handleSharePost(request: Request, env: WorkerEnv): Promise<Respon
 
     const meta = await bucket.head(filePath);
     if (!meta) return new Response("File not found", { status: 404 });
+    if (meta.httpMetadata?.contentType === "application/x-directory") {
+      return new Response("Cannot share a directory", { status: 400 });
+    }
 
     const expireSeconds = Number.parseInt(
       env.SHARE_DEFAULT_EXPIRE_SECONDS || "3600",
@@ -196,7 +313,12 @@ async function handleSharePost(request: Request, env: WorkerEnv): Promise<Respon
     }
 
     const token = generateShareToken();
-    await kv.put(token, JSON.stringify({ filePath }), { expirationTtl: expireSeconds });
+    const shareRecord: ShareRecord = {
+      filePath,
+      etag: meta.etag,
+      size: meta.size,
+    };
+    await kv.put(token, JSON.stringify(shareRecord), { expirationTtl: expireSeconds });
     await kv.put(pathKey, token, { expirationTtl: expireSeconds });
 
     const origin = new URL(request.url).origin;
@@ -229,12 +351,20 @@ async function handleShareDownload(pathname: string, env: WorkerEnv): Promise<Re
   if (!kv) return new Response("KV binding SHARE_KV not found", { status: 500 });
   if (!bucket) return new Response("Bucket not found", { status: 500 });
 
-  const rec = (await kv.get(token, "json")) as { filePath?: string } | null;
+  const rec = (await kv.get(token, "json")) as Partial<ShareRecord> | null;
   const filePath = rec?.filePath;
-  if (!filePath) return new Response("Link expired or invalid", { status: 410 });
+  if (!filePath || !rec?.etag || typeof rec.size !== "number") {
+    return new Response("Link expired or invalid", { status: 410 });
+  }
+  if (isInternalPath(filePath)) {
+    return new Response("Link expired or invalid", { status: 410 });
+  }
 
   const obj = await bucket.get(filePath);
   if (!obj) return new Response("File not found", { status: 404 });
+  if (obj.etag !== rec.etag || obj.size !== rec.size) {
+    return new Response("Link expired or invalid", { status: 410 });
+  }
 
   const fileName = filePath.split("/").pop() || "file";
   const asciiFallbackName = toAsciiFilenameFallback(fileName);
@@ -243,6 +373,9 @@ async function handleShareDownload(pathname: string, env: WorkerEnv): Promise<Re
     "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
     "Content-Disposition": `attachment; filename="${asciiFallbackName}"; filename*=UTF-8''${encodedName}`,
     "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
   });
   if (obj.size) headers.set("Content-Length", `${obj.size}`);
 
@@ -251,6 +384,9 @@ async function handleShareDownload(pathname: string, env: WorkerEnv): Promise<Re
 
 async function handleWebdavRequest(request: Request, env: WorkerEnv): Promise<Response> {
   if (request.method === "OPTIONS") return handleWebdavOptions();
+
+  const sameOriginError = validateSameOriginBrowserWrite(request);
+  if (sameOriginError) return sameOriginError;
 
   const authError = requireAuth(request, {
     username: env.WEBDAV_USERNAME,
@@ -274,7 +410,7 @@ export default {
     const pathname = new URL(request.url).pathname;
 
     if (pathname === "/api/share/status") {
-      if (request.method === "GET") return handleShareStatus(env);
+      if (request.method === "GET") return handleShareStatus(request, env);
       return methodNotAllowed();
     }
 
@@ -292,6 +428,6 @@ export default {
       return handleShareDownload(pathname, env);
     }
 
-    return env.ASSETS.fetch(request);
+    return handleAssetRequest(request, env);
   },
 };

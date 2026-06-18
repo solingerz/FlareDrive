@@ -12,7 +12,7 @@ export async function handleRequestMove({
     return new Response("Forbidden", { status: 403 });
   }
 
-  const response = await handleRequestCopy({ bucket, path, request });
+  const response = await handleRequestCopy({ bucket, path, request, env });
   if (response.status >= 400) return response;
 
   try {

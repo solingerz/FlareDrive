@@ -4,7 +4,8 @@ const DB_NAME = "flaredrive-transfer";
 const DB_VERSION = 2;
 const TASK_STORE = "upload_tasks";
 const FILE_STORE = "upload_task_files";
-const UPLOAD_TASK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const UPLOAD_TASK_TTL_MS = 24 * 60 * 60 * 1000;
+const PERSIST_UPLOAD_TASKS = true;
 
 interface PersistedTransferTaskMeta {
   id: string;
@@ -31,6 +32,7 @@ interface PersistedTransferFile {
 const TERMINAL_STATUSES: TransferTaskStatus[] = ["completed", "canceled"];
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let clearPersistedUploadTasksPromise: Promise<void> | null = null;
 
 function openDatabase(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
@@ -80,6 +82,14 @@ function deleteByKey(store: IDBObjectStore, key: string): Promise<void> {
   });
 }
 
+function clearStore(store: IDBObjectStore): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = store.clear();
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error("IndexedDB clear failed"));
+  });
+}
+
 function waitForTransaction(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
@@ -118,6 +128,24 @@ async function cleanupRecords(
   await waitForTransaction(tx);
 }
 
+async function clearPersistedUploadTasks(): Promise<void> {
+  if (clearPersistedUploadTasksPromise) return clearPersistedUploadTasksPromise;
+
+  clearPersistedUploadTasksPromise = clearPersistedUploadTasksOnce();
+  return clearPersistedUploadTasksPromise;
+}
+
+async function clearPersistedUploadTasksOnce(): Promise<void> {
+  const db = await openDatabase();
+  const tx = db.transaction([TASK_STORE, FILE_STORE], "readwrite");
+  const done = waitForTransaction(tx);
+  await Promise.all([
+    clearStore(tx.objectStore(TASK_STORE)),
+    clearStore(tx.objectStore(FILE_STORE)),
+  ]);
+  await done;
+}
+
 function serializeTaskMeta(task: TransferTask): PersistedTransferTaskMeta | null {
   if (task.type !== "upload") return null;
   if (TERMINAL_STATUSES.includes(task.status)) return null;
@@ -154,6 +182,10 @@ function serializeTaskFile(task: TransferTask): PersistedTransferFile | null {
 
 export async function loadPersistedUploadTasks(): Promise<TransferTask[]> {
   if (typeof indexedDB === "undefined") return [];
+  if (!PERSIST_UPLOAD_TASKS) {
+    await clearPersistedUploadTasks().catch(() => {});
+    return [];
+  }
 
   try {
     const nowTs = Date.now();
@@ -224,6 +256,10 @@ export async function loadPersistedUploadTasks(): Promise<TransferTask[]> {
 
 export async function persistUploadTasks(tasks: TransferTask[]): Promise<void> {
   if (typeof indexedDB === "undefined") return;
+  if (!PERSIST_UPLOAD_TASKS) {
+    await clearPersistedUploadTasks().catch(() => {});
+    return;
+  }
 
   try {
     const nowTs = Date.now();

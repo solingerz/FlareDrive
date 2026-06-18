@@ -35,6 +35,62 @@ export function notFound() {
   return new Response("Not found", { status: 404 });
 }
 
+function safeMetadataValue(
+  value: string | null,
+  maxLength: number
+): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > maxLength) return undefined;
+  if (/[\x00-\x1F\x7F]/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+export function buildUploadHttpMetadata(headers: Headers): R2HTTPMetadata {
+  const metadata: R2HTTPMetadata = {};
+  const contentType = safeMetadataValue(headers.get("Content-Type"), 255);
+  const contentLanguage = safeMetadataValue(
+    headers.get("Content-Language"),
+    128
+  );
+
+  if (contentType) metadata.contentType = contentType;
+  if (contentLanguage) metadata.contentLanguage = contentLanguage;
+
+  return metadata;
+}
+
+export function buildStoredHttpMetadata(
+  source: R2HTTPMetadata | undefined
+): R2HTTPMetadata {
+  const metadata: R2HTTPMetadata = {};
+  const contentType = safeMetadataValue(source?.contentType ?? null, 255);
+  const contentLanguage = safeMetadataValue(source?.contentLanguage ?? null, 128);
+
+  if (contentType) metadata.contentType = contentType;
+  if (contentLanguage) metadata.contentLanguage = contentLanguage;
+
+  return metadata;
+}
+
+export async function revokeShareForPath(
+  env: { SHARE_KV?: KVNamespace } | undefined,
+  path: string
+): Promise<void> {
+  const kv = env?.SHARE_KV;
+  if (!kv || !path) return;
+
+  const pathKey = `path:${path}`;
+  const token = await kv.get(pathKey);
+  if (!token) return;
+
+  const tokenData = (await kv.get(token, "json")) as { filePath?: string } | null;
+  if (tokenData?.filePath === path) {
+    await kv.delete(token);
+  }
+  await kv.delete(pathKey);
+}
+
 function safeJoin(segments: string[]): string {
   const out: string[] = [];
   for (const raw of segments) {

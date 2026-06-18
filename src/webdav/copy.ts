@@ -2,9 +2,11 @@ import pLimit from "p-limit";
 
 import { notFound } from "./utils";
 import {
+  buildStoredHttpMetadata,
   isInternalPath,
   listAll,
   RequestHandlerParams,
+  revokeShareForPath,
   WEBDAV_ENDPOINT,
   parseBucketPath,
 } from "./utils";
@@ -30,6 +32,7 @@ export async function handleRequestCopy({
   bucket,
   path,
   request,
+  env,
 }: RequestHandlerParams) {
   const dontOverwrite = request.headers.get("Overwrite") === "F";
   const destinationHeader = request.headers.get("Destination");
@@ -76,8 +79,12 @@ export async function handleRequestCopy({
     return new Response("Conflict", { status: 409 });
   }
 
+  if (destinationExists) {
+    await revokeShareForPath(env, destination);
+  }
+
   await bucket.put(destination, src.body, {
-    httpMetadata: src.httpMetadata,
+    httpMetadata: buildStoredHttpMetadata(src.httpMetadata),
     customMetadata: src.customMetadata,
   });
 
@@ -93,7 +100,7 @@ export async function handleRequestCopy({
           const srcObject = await bucket.get(object.key);
           if (srcObject === null) return;
           await bucket.put(target, srcObject.body, {
-            httpMetadata: object.httpMetadata,
+            httpMetadata: buildStoredHttpMetadata(object.httpMetadata),
             customMetadata: object.customMetadata,
           });
         };

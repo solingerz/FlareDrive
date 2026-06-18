@@ -1,7 +1,9 @@
 import {
+  buildUploadHttpMetadata,
   isInternalPath,
   isThumbnailPath,
   RequestHandlerParams,
+  revokeShareForPath,
   ROOT_OBJECT,
 } from "./utils";
 
@@ -51,6 +53,7 @@ export async function handleRequestPut({
   bucket,
   path,
   request,
+  env,
 }: RequestHandlerParams) {
   if (isInternalPath(path) && !isThumbnailPath(path)) {
     return new Response("Forbidden", { status: 403 });
@@ -88,9 +91,11 @@ export async function handleRequestPut({
   }
   const customMetadata = thumbnail ? { thumbnail } : undefined;
 
+  await revokeShareForPath(env, path);
+
   const result = await bucket.put(path, request.body, {
     onlyIf: request.headers,
-    httpMetadata: request.headers,
+    httpMetadata: buildUploadHttpMetadata(request.headers),
     customMetadata,
     sha256: expectedSha256,
   });

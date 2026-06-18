@@ -1,4 +1,10 @@
-import { isInternalPath, notFound, RequestHandlerParams } from "./utils";
+import {
+  buildUploadHttpMetadata,
+  isInternalPath,
+  notFound,
+  RequestHandlerParams,
+  revokeShareForPath,
+} from "./utils";
 
 const FD_SHA256_HEADER = "fd-sha256";
 const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
@@ -23,7 +29,7 @@ export async function handleRequestPostCreateMultipart({
   const customMetadata = thumbnail ? { thumbnail } : undefined;
 
   const multipartUpload = await bucket.createMultipartUpload(path, {
-    httpMetadata: request.headers,
+    httpMetadata: buildUploadHttpMetadata(request.headers),
     customMetadata,
   });
 
@@ -35,6 +41,7 @@ export async function handleRequestPostCompleteMultipart({
   bucket,
   path,
   request,
+  env,
 }: RequestHandlerParams) {
   const url = new URL(request.url);
   const uploadId = new URLSearchParams(url.search).get("uploadId");
@@ -56,6 +63,7 @@ export async function handleRequestPostCompleteMultipart({
   }
 
   try {
+    await revokeShareForPath(env, path);
     const object = await multipartUpload.complete(parts);
     const actualSha256Base64 = object.checksums.sha256
       ? encodeArrayBufferToBase64(object.checksums.sha256)
@@ -63,7 +71,13 @@ export async function handleRequestPostCompleteMultipart({
 
     const headers = new Headers({ etag: object.httpEtag });
     if (expectedSha256Base64) {
-      headers.set(FD_RESULT_SHA256_HEADER, expectedSha256Base64);
+      if (!actualSha256Base64) {
+        return new Response("Missing server checksum", { status: 502 });
+      }
+      if (actualSha256Base64 !== expectedSha256Base64) {
+        return new Response("Upload integrity check failed", { status: 400 });
+      }
+      headers.set(FD_RESULT_SHA256_HEADER, actualSha256Base64);
     } else if (actualSha256Base64) {
       headers.set(FD_RESULT_SHA256_HEADER, actualSha256Base64);
     }
@@ -81,6 +95,7 @@ export const handleRequestPost = async function ({
   bucket,
   path,
   request,
+  env,
 }: RequestHandlerParams) {
   if (isInternalPath(path)) {
     return new Response("Forbidden", { status: 403 });
@@ -94,7 +109,7 @@ export const handleRequestPost = async function ({
   }
 
   if (searchParams.has("uploadId")) {
-    return handleRequestPostCompleteMultipart({ bucket, path, request });
+    return handleRequestPostCompleteMultipart({ bucket, path, request, env });
   }
 
   return new Response("Method not allowed", { status: 405 });

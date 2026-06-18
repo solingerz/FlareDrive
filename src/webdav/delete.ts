@@ -1,4 +1,4 @@
-import { isInternalPath, notFound } from "./utils";
+import { isInternalPath, notFound, revokeShareForPath } from "./utils";
 import { listAll, RequestHandlerParams } from "./utils";
 
 export async function handleRequestDelete({
@@ -10,23 +10,10 @@ export async function handleRequestDelete({
     return new Response("Forbidden", { status: 403 });
   }
 
-  const kv = env?.SHARE_KV;
-  
   if (path !== "") {
     const obj = await bucket.head(path);
     if (obj === null) return notFound();
-    
-    const pathKey = `path:${path}`;
-    const token = await kv?.get(pathKey);
-    
-    if (token) {
-      const tokenData = await kv?.get(token, "json") as { filePath: string } | null;
-      
-      if (tokenData && tokenData.filePath === path) {
-        await kv?.delete(token);
-        await kv?.delete(pathKey);
-      }
-    }
+    await revokeShareForPath(env, path);
     
     await bucket.delete(path);
     
@@ -36,17 +23,7 @@ export async function handleRequestDelete({
 
   const children = listAll(bucket, path === "" ? undefined : `${path}/`);
   for await (const child of children) {
-    const pathKey = `path:${child.key}`;
-    const token = await kv?.get(pathKey);
-    
-    if (token) {
-      const tokenData = await kv?.get(token, "json") as { filePath: string } | null;
-      
-      if (tokenData && tokenData.filePath === child.key) {
-        await kv?.delete(token);
-        await kv?.delete(pathKey);
-      }
-    }
+    await revokeShareForPath(env, child.key);
     await bucket.delete(child.key);
   }
 
