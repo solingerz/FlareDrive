@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "npx wrangler dev",
     "build": "vite build",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run build && wrangler deploy --minify",
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
     "preview": "npx wrangler preview"
   },
