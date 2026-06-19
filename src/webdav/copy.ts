@@ -104,7 +104,7 @@ export async function handleRequestCopy({
             customMetadata: object.customMetadata,
           });
         };
-        const limit = pLimit(5);
+        const limit = pLimit(20);
         const promises = [];
         for await (const object of listAll(bucket, prefix, true)) {
           promises.push(limit(() => copy(object)));

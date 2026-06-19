@@ -6,7 +6,7 @@ import {
   Snackbar,
   Stack,
 } from "@mui/material";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import Header from "./components/Header";
 import Main from "./components/Main";
@@ -23,8 +23,14 @@ const theme = createTheme({
 
 function App() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showProgressDialog, setShowProgressDialog] = React.useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 150);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -37,7 +43,7 @@ function App() {
             onSearchChange={(newSearch: string) => setSearch(newSearch)}
             setShowProgressDialog={setShowProgressDialog}
           />
-          <Main search={search} onError={setError} />
+          <Main search={debouncedSearch} onError={setError} />
         </Stack>
         <Snackbar
           autoHideDuration={5000}

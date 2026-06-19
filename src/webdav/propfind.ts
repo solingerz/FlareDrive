@@ -43,25 +43,18 @@ function fromR2Object(object: R2Object | typeof ROOT_OBJECT): DavProperties {
   };
 }
 
-async function findChildren({
-  bucket,
-  path,
-  depth,
-}: {
-  bucket: R2Bucket;
-  path: string;
-  depth: string;
-}) {
-  if (!["1", "infinity"].includes(depth)) return [];
-
-  const objects: Array<R2Object> = [];
-
-  const prefix = path === "" ? path : `${path}/`;
-  for await (const object of listAll(bucket, prefix, depth === "infinity")) {
-    objects.push(object);
-  }
-
-  return objects;
+function formatResponse(item: R2Object | typeof ROOT_OBJECT): string {
+  const properties = fromR2Object(item);
+  const href = escapeXml(encodeURI(`${WEBDAV_ENDPOINT}${item.key}`));
+  const props = Object.entries(properties)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) =>
+      key === "resourcetype"
+        ? `<${key}>${value}</${key}>`
+        : `<${key}>${escapeXml(String(value))}</${key}>`
+    )
+    .join("");
+  return `<response><href>${href}</href><propstat><prop>${props}</prop><status>HTTP/1.1 200 OK</status></propstat></response>`;
 }
 
 export async function handleRequestPropfind({
@@ -69,11 +62,6 @@ export async function handleRequestPropfind({
   path,
   request,
 }: RequestHandlerParams) {
-  const responseTemplate = `<?xml version="1.0" encoding="utf-8" ?>
-<multistatus xmlns="DAV:" xmlns:fd="flaredrive">
-{{items}}
-</multistatus>`;
-
   const rootObject = path === "" ? ROOT_OBJECT : await bucket.head(path);
   if (!rootObject) return new Response("Not found", { status: 404 });
   const isDirectory =
@@ -81,36 +69,35 @@ export async function handleRequestPropfind({
     rootObject.httpMetadata?.contentType === "application/x-directory";
   const depth = request.headers.get("Depth") ?? "infinity";
 
-  const children = !isDirectory
-    ? []
-    : await findChildren({
-        bucket,
-        path,
-        depth,
-      });
+  const encoder = new TextEncoder();
+  let isFirst = true;
 
-  const items = [rootObject, ...children].map((child) => {
-    const properties = fromR2Object(child);
-    return `
-  <response>
-    <href>${escapeXml(encodeURI(`${WEBDAV_ENDPOINT}${child.key}`))}</href>
-    <propstat>
-      <prop>
-        ${Object.entries(properties)
-          .filter(([_, value]) => value !== undefined)
-          .map(([key, value]) =>
-            key === "resourcetype"
-              ? `<${key}>${value}</${key}>`
-              : `<${key}>${escapeXml(String(value))}</${key}>`
-          )
-          .join("\n")}
-      </prop>
-      <status>HTTP/1.1 200 OK</status>
-    </propstat>
-  </response>`;
+  const stream = new ReadableStream({
+    async start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          `<?xml version="1.0" encoding="utf-8"?>\n<multistatus xmlns="DAV:" xmlns:fd="flaredrive">`
+        )
+      );
+      controller.enqueue(encoder.encode(formatResponse(rootObject)));
+
+      if (isDirectory && ["1", "infinity"].includes(depth)) {
+        const prefix = path === "" ? path : `${path}/`;
+        for await (const object of listAll(
+          bucket,
+          prefix,
+          depth === "infinity"
+        )) {
+          controller.enqueue(encoder.encode(formatResponse(object)));
+        }
+      }
+
+      controller.enqueue(encoder.encode("</multistatus>"));
+      controller.close();
+    },
   });
 
-  return new Response(responseTemplate.replace("{{items}}", items.join("")), {
+  return new Response(stream, {
     status: 207,
     headers: { "Content-Type": "application/xml" },
   });

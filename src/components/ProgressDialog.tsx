@@ -16,7 +16,7 @@ import {
   Typography,
   Button,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   TransferTask,
   useTransferQueue,
@@ -102,7 +102,7 @@ function ProgressRingAction({
   );
 }
 
-function ProgressDialog({
+const ProgressDialog = memo(function ProgressDialog({
   open,
   onClose,
 }: {
@@ -230,6 +230,6 @@ function ProgressDialog({
       </DialogActions>
     </Dialog>
   );
-}
+});
 
 export default ProgressDialog;

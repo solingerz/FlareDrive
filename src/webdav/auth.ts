@@ -12,6 +12,18 @@ export interface AuthConfig {
  */
 export const PUBLIC_READ_METHODS = ["GET", "HEAD", "PROPFIND"] as const;
 
+let cachedExpectedAuth: string | undefined;
+let cachedAuthKey: string | undefined;
+
+function getExpectedAuth(config: AuthConfig): string {
+  const key = `${config.username}:${config.password}`;
+  if (cachedAuthKey !== key) {
+    cachedAuthKey = key;
+    cachedExpectedAuth = `Basic ${btoa(key)}`;
+  }
+  return cachedExpectedAuth!;
+}
+
 /**
  * 统一的认证中间件
  * @param request HTTP 请求对象
@@ -22,20 +34,17 @@ export function requireAuth(
   request: Request,
   config: AuthConfig
 ): Response | null {
-  // 检查是否启用了 WebDAV 认证
   if (!config.username || !config.password) {
     return new Response("WebDAV protocol is not enabled", { status: 403 });
   }
 
-  // 检查是否可以跳过认证 (公开读取模式)
-  const isPublicReadMethod = PUBLIC_READ_METHODS.includes(
-    request.method as any
-  );
-  if (config.publicRead && isPublicReadMethod) {
-    return null; // 允许访问
+  if (
+    config.publicRead &&
+    PUBLIC_READ_METHODS.includes(request.method as any)
+  ) {
+    return null;
   }
 
-  // 验证 Authorization 头
   const auth = request.headers.get("Authorization");
   if (!auth) {
     return new Response("Unauthorized", {
@@ -44,16 +53,14 @@ export function requireAuth(
     });
   }
 
-  // 验证用户名和密码
-  const expectedAuth = `Basic ${btoa(`${config.username}:${config.password}`)}`;
-  if (auth !== expectedAuth) {
+  if (auth !== getExpectedAuth(config)) {
     return new Response("Unauthorized", {
       status: 401,
       headers: { "WWW-Authenticate": `Basic realm="WebDAV"` },
     });
   }
 
-  return null; // 认证成功
+  return null;
 }
 
 /**

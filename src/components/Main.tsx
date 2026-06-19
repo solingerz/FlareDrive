@@ -63,12 +63,12 @@ function PathBreadcrumb({
       </Button>
       {parts.map((part, index) =>
         index === parts.length - 1 ? (
-          <Typography key={index} color="text.primary">
+          <Typography key={`${part}-${index}`} color="text.primary">
             {part}
           </Typography>
         ) : (
           <Link
-            key={index}
+            key={`${part}-${index}`}
             component="button"
             onClick={() => {
               onCwdChange(parts.slice(0, index + 1).join("/") + "/");
@@ -210,6 +210,47 @@ function Main({
     });
   }, []);
 
+  const handleDrop = useCallback(
+    (files: FileList) => {
+      uploadEnqueue(
+        ...Array.from(files).map((file) => ({ file, basedir: cwd }))
+      );
+    },
+    [cwd, uploadEnqueue]
+  );
+
+  const handleCloseMultiSelect = useCallback(() => setMultiSelected(null), []);
+
+  const handleDownload = useCallback(async () => {
+    if (multiSelected?.length !== 1) return;
+    await downloadFile(multiSelected[0]);
+  }, [multiSelected]);
+
+  const handleRename = useCallback(async () => {
+    if (multiSelected?.length !== 1) return;
+    const newName = window.prompt("Rename to:");
+    if (!newName) return;
+    await copyPaste(multiSelected[0], cwd + newName, true);
+    fetchFiles();
+  }, [multiSelected, cwd, fetchFiles]);
+
+  const handleDelete = useCallback(async () => {
+    if (!multiSelected?.length) return;
+    const filenames = multiSelected
+      .map((key) => key.replace(/\/$/, "").split("/").pop())
+      .join("\n");
+    const confirmMessage = "Delete the following file(s) permanently?";
+    if (!window.confirm(`${confirmMessage}\n${filenames}`)) return;
+    for (const key of multiSelected) await deletePath(key);
+    fetchFiles();
+  }, [multiSelected, fetchFiles]);
+
+  const handleShare = useCallback(async () => {
+    if (multiSelected?.length !== 1) return;
+    const data = await createShareLink(multiSelected[0]);
+    await systemShare(data);
+  }, [multiSelected]);
+
   return (
     <>
       {cwd && <PathBreadcrumb path={cwd} onCwdChange={setCwd} />}
@@ -219,16 +260,10 @@ function Main({
           <CircularProgress />
         </Centered>
       ) : (
-        <DropZone
-          onDrop={(files) => {
-            uploadEnqueue(
-              ...Array.from(files).map((file) => ({ file, basedir: cwd }))
-            );
-          }}
-        >
+        <DropZone onDrop={handleDrop}>
           <FileGrid
             files={filteredFiles}
-            onCwdChange={(newCwd: string) => setCwd(newCwd)}
+            onCwdChange={setCwd}
             multiSelected={multiSelected}
             onMultiSelect={handleMultiSelect}
             emptyMessage={<Centered>No files or folders</Centered>}
@@ -271,33 +306,11 @@ function Main({
       <MultiSelectToolbar
         multiSelected={multiSelected}
         shareEnabled={shareEnabled}
-        onClose={() => setMultiSelected(null)}
-        onDownload={async () => {
-          if (multiSelected?.length !== 1) return;
-          await downloadFile(multiSelected[0]);
-        }}
-        onRename={async () => {
-          if (multiSelected?.length !== 1) return;
-          const newName = window.prompt("Rename to:");
-          if (!newName) return;
-          await copyPaste(multiSelected[0], cwd + newName, true);
-          fetchFiles();
-        }}
-        onDelete={async () => {
-          if (!multiSelected?.length) return;
-          const filenames = multiSelected
-            .map((key) => key.replace(/\/$/, "").split("/").pop())
-            .join("\n");
-          const confirmMessage = "Delete the following file(s) permanently?";
-          if (!window.confirm(`${confirmMessage}\n${filenames}`)) return;
-          for (const key of multiSelected) await deletePath(key);
-          fetchFiles();
-        }}
-        onShare={async () => {
-          if (multiSelected?.length !== 1) return;
-          const data = await createShareLink(multiSelected[0]);
-          await systemShare(data);
-        }}
+        onClose={handleCloseMultiSelect}
+        onDownload={handleDownload}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        onShare={handleShare}
       />
     </>
   );

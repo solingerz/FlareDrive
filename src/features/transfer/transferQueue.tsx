@@ -177,29 +177,11 @@ export function TransferQueueProvider({
     transferTasksRef.current = transferTasks;
   }, [transferTasks]);
 
-  const persistenceSignature = useMemo(
-    () =>
-      JSON.stringify(
-        transferTasks.map((task) => ({
-          id: task.id,
-          type: task.type,
-          status: task.status,
-          remoteKey: task.remoteKey,
-          name: task.name,
-          total: task.total,
-          createdAt: task.createdAt,
-          multipart: task.multipart
-            ? {
-                uploadId: task.multipart.uploadId,
-                uploadedParts: Object.keys(task.multipart.uploadedParts)
-                  .map((part) => Number(part))
-                  .sort((a, b) => a - b),
-              }
-            : null,
-        }))
-      ),
-    [transferTasks]
-  );
+  const [persistenceVersion, setPersistenceVersion] = useState(0);
+
+  useEffect(() => {
+    setPersistenceVersion((v) => (v + 1) % 1_000_000);
+  }, [transferTasks]);
 
   useEffect(() => {
     let canceled = false;
@@ -236,7 +218,7 @@ export function TransferQueueProvider({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [hydrated, persistenceSignature]);
+  }, [hydrated, persistenceVersion]);
 
   const startTask = useCallback((taskId: string) => {
     if (runningControllersRef.current.has(taskId)) return;

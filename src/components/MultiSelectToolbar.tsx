@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { memo, useState } from "react";
 import { IconButton, Menu, MenuItem, Slide, Toolbar } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -7,7 +7,7 @@ import {
   MoreHoriz as MoreHorizIcon,
 } from "@mui/icons-material";
 
-function MultiSelectToolbar({
+const MultiSelectToolbar = memo(function MultiSelectToolbar({
   multiSelected,
   shareEnabled,
   onClose,
@@ -81,6 +81,6 @@ function MultiSelectToolbar({
       </Toolbar>
     </Slide>
   );
-}
+});
 
 export default MultiSelectToolbar;

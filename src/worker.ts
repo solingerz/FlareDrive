@@ -230,11 +230,31 @@ function applySecurityHeaders(response: Response, request: Request): Response {
   });
 }
 
+const IMMUTABLE_ASSET_PATTERN = /\.[a-fA-F0-9]{6,}\.(js|css|mjs|png|ico|woff2?)$/;
+
 async function handleAssetRequest(
   request: Request,
   env: WorkerEnv
 ): Promise<Response> {
-  return applySecurityHeaders(await env.ASSETS.fetch(request), request);
+  const response = await env.ASSETS.fetch(request);
+  const url = new URL(request.url);
+
+  const secured = applySecurityHeaders(response, request);
+  const headers = new Headers(secured.headers);
+
+  if (IMMUTABLE_ASSET_PATTERN.test(url.pathname)) {
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  } else if (url.pathname === "/" || url.pathname.endsWith(".html")) {
+    headers.set("Cache-Control", "no-cache");
+  } else {
+    headers.set("Cache-Control", "public, max-age=86400");
+  }
+
+  return new Response(secured.body, {
+    status: secured.status,
+    statusText: secured.statusText,
+    headers,
+  });
 }
 
 async function handleShareStatus(request: Request, env: WorkerEnv): Promise<Response> {

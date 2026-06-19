@@ -1,3 +1,4 @@
+import { memo } from "react";
 import AudioFileIcon from "@mui/icons-material/AudioFile";
 import CodeIcon from "@mui/icons-material/Code";
 import FolderIcon from "@mui/icons-material/Folder";
@@ -7,10 +8,11 @@ import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutl
 import PdfIcon from "@mui/icons-material/PictureAsPdf";
 import VideoFileIcon from "@mui/icons-material/VideoFile";
 
-function MimeIcon({ contentType }: { contentType: string }) {
-  const fallbackIcon = <InsertDriveFileOutlinedIcon fontSize="large" />;
-  if (typeof contentType !== "string") return fallbackIcon;
-
+const MimeIcon = memo(function MimeIcon({
+  contentType,
+}: {
+  contentType: string;
+}) {
   return contentType.startsWith("image/") ? (
     <ImageIcon fontSize="large" />
   ) : contentType.startsWith("audio/") ? (
@@ -26,8 +28,8 @@ function MimeIcon({ contentType }: { contentType: string }) {
   ) : contentType === "application/x-directory" ? (
     <FolderIcon fontSize="large" />
   ) : (
-    fallbackIcon
+    <InsertDriveFileOutlinedIcon fontSize="large" />
   );
-}
+});
 
 export default MimeIcon;
