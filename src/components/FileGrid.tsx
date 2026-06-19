@@ -98,7 +98,7 @@ function FileGrid({
                   >
                     {new Date(file.uploaded).toLocaleString()}
                   </Box>
-                  {!isDirectory(file) && humanReadableSize(file.size)}
+                  {isDirectory(file) ? "Folder" : humanReadableSize(file.size)}
                 </React.Fragment>
               }
             />
