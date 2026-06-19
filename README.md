@@ -58,8 +58,8 @@ wrangler secret put WEBDAV_PASSWORD
 ### Run Locally
 
 ```bash
-npm run build:app
-npm run dev:worker
+npm run build
+npm run dev
 ```
 
 ### Deploy
@@ -129,11 +129,11 @@ src/
 
 ## Scripts
 
-- `npm run dev:app` start Vite dev server
-- `npm run build` build frontend assets
-- `npm run dev:worker` run Worker locally via Wrangler
+- `npm run dev` run Worker locally via Wrangler
+- `npm run build` build frontend assets via Vite
+- `npm run deploy` build + deploy to Cloudflare
+- `npm run preview` run Wrangler preview
 - `npm run typecheck:worker` type-check Worker code
-- `npm run deploy` build + deploy
 
 ## Security Notes
 
