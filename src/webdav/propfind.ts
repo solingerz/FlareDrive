@@ -93,7 +93,7 @@ export async function handleRequestPropfind({
     const properties = fromR2Object(child);
     return `
   <response>
-    <href>${encodeURI(`${WEBDAV_ENDPOINT}${child.key}`)}</href>
+    <href>${escapeXml(encodeURI(`${WEBDAV_ENDPOINT}${child.key}`))}</href>
     <propstat>
       <prop>
         ${Object.entries(properties)

@@ -21,10 +21,18 @@ export async function handleRequestDelete({
       return new Response(null, { status: 204 });
   }
 
-  const children = listAll(bucket, path === "" ? undefined : `${path}/`);
-  for await (const child of children) {
-    await revokeShareForPath(env, child.key);
-    await bucket.delete(child.key);
+  const prefix = path === "" ? undefined : `${path}/`;
+  const MAX_CLEANUP_PASSES = 3;
+
+  for (let pass = 0; pass < MAX_CLEANUP_PASSES; pass++) {
+    let deleted = 0;
+    const children = listAll(bucket, prefix);
+    for await (const child of children) {
+      await revokeShareForPath(env, child.key);
+      await bucket.delete(child.key);
+      deleted++;
+    }
+    if (deleted === 0) break;
   }
 
   return new Response(null, { status: 204 });
