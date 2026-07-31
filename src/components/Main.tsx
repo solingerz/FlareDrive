@@ -131,31 +131,68 @@ function Main({
 }) {
   const [cwd, setCwd] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [filesCwd, setFilesCwd] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [multiSelected, setMultiSelected] = useState<string[] | null>(null);
   const [showUploadDrawer, setShowUploadDrawer] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [shareEnabled, setShareEnabled] = useState(false);
   const hadActiveUploadsRef = useRef(false);
+  const fetchRequestRef = useRef<{
+    token: number;
+    controller: AbortController | null;
+  }>({ token: 0, controller: null });
 
   const transferQueue = useTransferQueue();
   const uploadEnqueue = useUploadEnqueue();
 
   const fetchFiles = useCallback(() => {
-    fetchPath(cwd)
+    // Supersede any in-flight request from a previous cwd so its response
+    // cannot overwrite the listing of the currently displayed folder.
+    const token = ++fetchRequestRef.current.token;
+    fetchRequestRef.current.controller?.abort();
+    const controller = new AbortController();
+    fetchRequestRef.current.controller = controller;
+
+    setRefreshing(true);
+
+    fetchPath(cwd, controller.signal)
       .then((files) => {
+        if (token !== fetchRequestRef.current.token) return;
         setFiles(files);
+        setFilesCwd(cwd);
         setMultiSelected(null);
       })
-      .catch(onError)
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        onError(error);
+      })
+      .finally(() => {
+        if (token === fetchRequestRef.current.token) {
+          setRefreshing(false);
+          setLoading(false);
+        }
+      });
   }, [cwd, onError]);
 
-  useEffect(() => setLoading(true), [cwd]);
+  // Clear the current selection when navigating. The listing itself is cleared
+  // implicitly: filesCwd only matches cwd once that folder's fetch lands, so
+  // the grid renders empty (never the previous folder's contents) in between.
+  useEffect(() => {
+    setMultiSelected(null);
+  }, [cwd]);
 
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  useEffect(
+    () => () => {
+      fetchRequestRef.current.controller?.abort();
+    },
+    []
+  );
 
   useEffect(() => {
     let canceled = false;
@@ -262,11 +299,15 @@ function Main({
       ) : (
         <DropZone onDrop={handleDrop}>
           <FileGrid
-            files={filteredFiles}
+            files={cwd === filesCwd ? filteredFiles : []}
             onCwdChange={setCwd}
             multiSelected={multiSelected}
             onMultiSelect={handleMultiSelect}
-            emptyMessage={<Centered>No files or folders</Centered>}
+            emptyMessage={
+              refreshing || cwd !== filesCwd ? null : (
+                <Centered>No files or folders</Centered>
+              )
+            }
           />
         </DropZone>
       )}

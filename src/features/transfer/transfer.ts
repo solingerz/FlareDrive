@@ -257,10 +257,11 @@ function xhrFetch(
   });
 }
 
-export async function fetchPath(path: string) {
+export async function fetchPath(path: string, signal?: AbortSignal) {
   const res = await fetch(`${WEBDAV_ENDPOINT}${encodeKey(path)}`, {
     method: "PROPFIND",
     headers: { Depth: "1" },
+    signal,
   });
 
   if (!res.ok) throw new Error("Failed to fetch");
