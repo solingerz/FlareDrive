@@ -9,6 +9,10 @@ export const WEBDAV_ENDPOINT = "/webdav/";
 
 const INTERNAL_PREFIX = "_$flaredrive$/";
 const THUMBNAIL_PATH_PATTERN = /^_\$flaredrive\$\/thumbnails\/[a-f0-9]{40}\.png$/i;
+export const THUMBNAIL_DIGEST_PATTERN = /^[a-f0-9]{40}$/i;
+
+export const FD_SHA256_HEADER = "fd-sha256";
+export const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
 
 export function isInternalPath(path: string): boolean {
   return path === "_$flaredrive$" || path.startsWith(INTERNAL_PREFIX);
@@ -33,6 +37,39 @@ export const ROOT_OBJECT = {
 
 export function notFound() {
   return new Response("Not found", { status: 404 });
+}
+
+export function encodeArrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+export function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+export function toAsciiFilenameFallback(fileName: string): string {
+  if (/^[\x20-\x7E]+$/.test(fileName)) return fileName;
+  const normalized = fileName.normalize("NFKD");
+  return (
+    normalized
+      .replace(/[^\x20-\x7E]/g, "_")
+      .replace(/["\\]/g, "_")
+      .replace(/[/;:]/g, "_")
+      .trim() || "download"
+  );
+}
+
+export function encodeContentDispositionFilenameStar(fileName: string): string {
+  return encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
 }
 
 function safeMetadataValue(
@@ -118,6 +155,30 @@ export function parseBucketPath(context: any): [R2Bucket, string] {
   const rawParts = (params.path || []) as string[];
   const normalizedPath = safeJoin(rawParts);
   return [bucket as R2Bucket, normalizedPath];
+}
+
+/**
+ * Resolves the normalized bucket path from a WebDAV `Destination` header.
+ * Throws a `Response` on invalid destinations so callers keep their own
+ * error semantics.
+ */
+export function parseDestinationPath(
+  destinationHeader: string,
+  request: Request,
+  env: { [key: string]: unknown }
+): string {
+  const destinationUrl = new URL(destinationHeader, request.url);
+  if (!destinationUrl.pathname.startsWith(WEBDAV_ENDPOINT)) {
+    throw new Response("Bad Request", { status: 400 });
+  }
+
+  const rawPath = destinationUrl.pathname.slice(WEBDAV_ENDPOINT.length);
+  const [, normalizedPath] = parseBucketPath({
+    request,
+    env,
+    params: { path: rawPath.split("/") },
+  });
+  return normalizedPath.replace(/\/$/, "");
 }
 
 export async function* listAll(

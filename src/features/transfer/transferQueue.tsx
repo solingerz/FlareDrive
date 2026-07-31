@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 
-import { processTransferTask } from "./transfer";
+import { isAbortError, processTransferTask } from "./transfer";
 import { loadPersistedUploadTasks, persistUploadTasks } from "./transferPersistence";
 
 export type TransferTaskType = "upload" | "download";
@@ -77,13 +77,6 @@ function createTaskId() {
 
 function isUploadTaskActive(task: TransferTask) {
   return task.type === "upload" && ["pending", "in-progress", "paused"].includes(task.status);
-}
-
-function isAbortError(error: unknown): error is DOMException & { reason?: unknown } {
-  return (
-    error instanceof DOMException &&
-    error.name === "AbortError"
-  );
 }
 
 function getAbortReason(error: unknown, signal: AbortSignal): unknown {

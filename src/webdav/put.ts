@@ -1,39 +1,25 @@
 import {
   buildUploadHttpMetadata,
+  decodeBase64ToArrayBuffer,
+  encodeArrayBufferToBase64,
+  FD_RESULT_SHA256_HEADER,
+  FD_SHA256_HEADER,
   isInternalPath,
   isThumbnailPath,
   RequestHandlerParams,
   revokeShareForPath,
   ROOT_OBJECT,
+  THUMBNAIL_DIGEST_PATTERN,
 } from "./utils";
-
-const FD_SHA256_HEADER = "fd-sha256";
-const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
-const THUMBNAIL_DIGEST_PATTERN = /^[a-f0-9]{40}$/i;
-
-function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function encodeArrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
 
 async function handleRequestPutMultipart({
   bucket,
   path,
   request,
 }: RequestHandlerParams) {
-  const url = new URL(request.url);
-
-  const uploadId = new URLSearchParams(url.search).get("uploadId");
-  const partNumberStr = new URLSearchParams(url.search).get("partNumber");
+  const searchParams = new URLSearchParams(new URL(request.url).search);
+  const uploadId = searchParams.get("uploadId");
+  const partNumberStr = searchParams.get("partNumber");
   if (!uploadId || !partNumberStr || !request.body)
     return new Response("Bad Request", { status: 400 });
   const multipartUpload = bucket.resumeMultipartUpload(path, uploadId);

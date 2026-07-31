@@ -1,19 +1,18 @@
-import { isInternalPath, RequestHandlerParams, WEBDAV_ENDPOINT, parseBucketPath } from "./utils";
+import {
+  isInternalPath,
+  parseDestinationPath,
+  RequestHandlerParams,
+} from "./utils";
 import { handleRequestCopy } from "./copy";
 import { handleRequestDelete } from "./delete";
 
-function parseDestinationEnv(destinationHeader: string, request: Request, env: any): string | null {
+function parseDestinationEnv(
+  destinationHeader: string,
+  request: Request,
+  env: { [key: string]: unknown }
+): string | null {
   try {
-    const destinationUrl = new URL(destinationHeader, request.url);
-    if (!destinationUrl.pathname.startsWith(WEBDAV_ENDPOINT)) return null;
-    const rawPath = destinationUrl.pathname.slice(WEBDAV_ENDPOINT.length);
-    const pathParts = rawPath.split("/");
-    const [, normalizedPath] = parseBucketPath({
-      request,
-      env,
-      params: { path: pathParts },
-    });
-    return normalizedPath.replace(/\/$/, "");
+    return parseDestinationPath(destinationHeader, request, env);
   } catch {
     return null;
   }

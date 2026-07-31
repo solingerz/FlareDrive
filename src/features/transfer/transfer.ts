@@ -15,7 +15,7 @@ const MULTIPART_MIN_CONCURRENCY = 2;
 const MULTIPART_MAX_CONCURRENCY = 6;
 const MULTIPART_INITIAL_CONCURRENCY = 3;
 
-export const SIZE_LIMIT = 5 * 1024 * 1024; // 5MB
+const SIZE_LIMIT = 5 * 1024 * 1024; // 5MB
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -56,7 +56,9 @@ function isMultipartSessionExpiredResponse(status: number, message: string): boo
   return /10024|multipart upload does not exist/i.test(message);
 }
 
-function isAbortError(error: unknown): error is DOMException & { reason?: unknown } {
+export function isAbortError(
+  error: unknown
+): error is DOMException & { reason?: unknown } {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
@@ -290,7 +292,7 @@ export async function fetchPath(path: string, signal?: AbortSignal) {
         "thumbnail"
       )[0]?.textContent;
       return {
-        key: decodeURI(href).replace(/^\/webdav\//, ""),
+        key: decodeURI(href).slice(WEBDAV_ENDPOINT.length),
         size: size ? Number(size) : 0,
         uploaded: lastModified!,
         httpMetadata: { contentType: contentType! },
@@ -426,7 +428,7 @@ async function generateImageThumbnailInWorker(
   }
 }
 
-export async function generateThumbnail(file: File, signal?: AbortSignal) {
+async function generateThumbnail(file: File, signal?: AbortSignal) {
   assertNotAborted(signal);
 
   if (file.type.startsWith("image/")) {
@@ -445,7 +447,7 @@ export async function generateThumbnail(file: File, signal?: AbortSignal) {
   return generateThumbnailOnMainThread(file);
 }
 
-export async function blobDigest(blob: Blob) {
+async function blobDigest(blob: Blob) {
   const digest = await crypto.subtle.digest("SHA-1", await blob.arrayBuffer());
   const digestArray = Array.from(new Uint8Array(digest));
   const digestHex = digestArray
@@ -567,7 +569,9 @@ async function completeMultipartUpload({
 }): Promise<Response> {
   const completeParams = new URLSearchParams({ uploadId });
 
-  for (let attempt = 0; attempt <= MAX_REQUEST_RETRIES; attempt += 1) {
+  // Unbounded loop: every iteration either returns or throws, so the
+  // previous trailing throw after the loop was unreachable.
+  for (let attempt = 0; ; attempt += 1) {
     assertNotAborted(signal);
 
     const response = await fetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}?${completeParams}`, {
@@ -591,8 +595,6 @@ async function completeMultipartUpload({
     const delay = computeRetryDelayMs(attempt, response.headers.get("retry-after"));
     await sleep(delay, signal);
   }
-
-  throw new Error("Failed to complete multipart upload");
 }
 
 export async function multipartUpload(
@@ -660,10 +662,7 @@ export async function multipartUpload(
       total: file.size,
     });
 
-    let adaptiveConcurrency = Math.min(
-      MULTIPART_MAX_CONCURRENCY,
-      Math.max(MULTIPART_MIN_CONCURRENCY, MULTIPART_INITIAL_CONCURRENCY)
-    );
+    let adaptiveConcurrency = MULTIPART_INITIAL_CONCURRENCY;
     const limit = pLimit(adaptiveConcurrency);
     let successStreak = 0;
 
@@ -782,10 +781,6 @@ export async function copyPaste(source: string, target: string, move = false) {
   if (!res.ok) {
     throw new Error((await res.text()) || `Failed to ${move ? "move" : "copy"}`);
   }
-}
-
-export async function openFile(path: string) {
-  window.open(`${WEBDAV_ENDPOINT}${encodeKey(path)}`, "_blank", "noopener,noreferrer");
 }
 
 export async function downloadFile(path: string) {

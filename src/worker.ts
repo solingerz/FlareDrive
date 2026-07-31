@@ -8,7 +8,12 @@ import { handleRequestMove } from "./webdav/move";
 import { handleRequestPost } from "./webdav/post";
 import { handleRequestPropfind } from "./webdav/propfind";
 import { handleRequestPut } from "./webdav/put";
-import { isInternalPath, parseBucketPath } from "./webdav/utils";
+import {
+  encodeContentDispositionFilenameStar,
+  isInternalPath,
+  parseBucketPath,
+  toAsciiFilenameFallback,
+} from "./webdav/utils";
 
 type WorkerEnv = {
   ASSETS: Fetcher;
@@ -137,23 +142,6 @@ function generateShareToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function toAsciiFilenameFallback(fileName: string): string {
-  const normalized = fileName.normalize("NFKD");
-  const asciiOnly = normalized
-    .replace(/[^\x20-\x7E]/g, "_")
-    .replace(/["\\]/g, "_")
-    .replace(/[/;:]/g, "_")
-    .trim();
-  return asciiOnly || "download";
-}
-
-function encodeContentDispositionFilenameStar(fileName: string): string {
-  return encodeURIComponent(fileName).replace(
-    /['()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
-  );
 }
 
 function normalizeShareFilePath(

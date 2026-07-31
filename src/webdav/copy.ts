@@ -1,32 +1,14 @@
 import pLimit from "p-limit";
 
-import { notFound } from "./utils";
 import {
   buildStoredHttpMetadata,
   isInternalPath,
   listAll,
+  notFound,
+  parseDestinationPath,
   RequestHandlerParams,
   revokeShareForPath,
-  WEBDAV_ENDPOINT,
-  parseBucketPath,
 } from "./utils";
-
-function normalizeDestinationPath(destinationHeader: string, request: Request) {
-  const destinationUrl = new URL(destinationHeader, request.url);
-  if (!destinationUrl.pathname.startsWith(WEBDAV_ENDPOINT)) {
-    throw new Response("Bad Request", { status: 400 });
-  }
-
-  const rawPath = destinationUrl.pathname.slice(WEBDAV_ENDPOINT.length);
-  const pathParts = rawPath.split("/");
-  const fakeContext = {
-    request,
-    env: { BUCKET: {} as R2Bucket },
-    params: { path: pathParts },
-  };
-  const [, normalizedPath] = parseBucketPath(fakeContext);
-  return normalizedPath.replace(/\/$/, "");
-}
 
 export async function handleRequestCopy({
   bucket,
@@ -44,7 +26,9 @@ export async function handleRequestCopy({
 
   let destination = "";
   try {
-    destination = normalizeDestinationPath(destinationHeader, request);
+    destination = parseDestinationPath(destinationHeader, request, {
+      BUCKET: {} as R2Bucket,
+    });
   } catch (error) {
     return error instanceof Response
       ? error

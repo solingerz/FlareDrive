@@ -1,21 +1,14 @@
 import {
   buildUploadHttpMetadata,
+  encodeArrayBufferToBase64,
+  FD_RESULT_SHA256_HEADER,
+  FD_SHA256_HEADER,
   isInternalPath,
   notFound,
   RequestHandlerParams,
   revokeShareForPath,
+  THUMBNAIL_DIGEST_PATTERN,
 } from "./utils";
-
-const FD_SHA256_HEADER = "fd-sha256";
-const FD_RESULT_SHA256_HEADER = "x-fd-sha256";
-const THUMBNAIL_DIGEST_PATTERN = /^[a-f0-9]{40}$/i;
-
-function encodeArrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
 
 export async function handleRequestPostCreateMultipart({
   bucket,
@@ -91,7 +84,7 @@ export async function handleRequestPostCompleteMultipart({
   }
 }
 
-export const handleRequestPost = async function ({
+export async function handleRequestPost({
   bucket,
   path,
   request,
@@ -101,8 +94,7 @@ export const handleRequestPost = async function ({
     return new Response("Forbidden", { status: 403 });
   }
 
-  const url = new URL(request.url);
-  const searchParams = new URLSearchParams(url.search);
+  const searchParams = new URLSearchParams(new URL(request.url).search);
 
   if (searchParams.has("uploads")) {
     return handleRequestPostCreateMultipart({ bucket, path, request });
@@ -113,4 +105,4 @@ export const handleRequestPost = async function ({
   }
 
   return new Response("Method not allowed", { status: 405 });
-};
+}

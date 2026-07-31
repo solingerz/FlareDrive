@@ -1,26 +1,11 @@
 import {
+  encodeContentDispositionFilenameStar,
   isInternalPath,
   isThumbnailPath,
   notFound,
   RequestHandlerParams,
+  toAsciiFilenameFallback,
 } from "./utils";
-
-function toAsciiFilenameFallback(fileName: string): string {
-  if (/^[\x20-\x7E]+$/.test(fileName)) return fileName;
-  const normalized = fileName.normalize("NFKD");
-  return normalized
-    .replace(/[^\x20-\x7E]/g, "_")
-    .replace(/["\\]/g, "_")
-    .replace(/[/;:]/g, "_")
-    .trim() || "download";
-}
-
-function encodeContentDispositionFilenameStar(fileName: string): string {
-  return encodeURIComponent(fileName).replace(
-    /['()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
-  );
-}
 
 function isTextFile(contentType: string, path: string): boolean {
   const ct = contentType.toLowerCase();
@@ -110,13 +95,11 @@ export async function handleRequestGet({
         Number.isFinite(contentLength) ? contentLength : null
       );
       headers.delete("Content-Length");
-      if (path.startsWith("_$flaredrive$/thumbnails/"))
-        headers.set("Cache-Control", "max-age=31536000");
+      if (isThumbnailPath(path)) headers.set("Cache-Control", "max-age=31536000");
       return new Response(bodyWithCharset, { headers });
     }
   }
 
-  if (path.startsWith("_$flaredrive$/thumbnails/"))
-    headers.set("Cache-Control", "max-age=31536000");
+  if (isThumbnailPath(path)) headers.set("Cache-Control", "max-age=31536000");
   return new Response(obj.body, { headers });
 }

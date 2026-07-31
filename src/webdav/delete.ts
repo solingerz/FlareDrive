@@ -1,6 +1,11 @@
 import pLimit from "p-limit";
-import { isInternalPath, notFound, revokeShareForPath } from "./utils";
-import { listAll, RequestHandlerParams } from "./utils";
+import {
+  isInternalPath,
+  listAll,
+  notFound,
+  RequestHandlerParams,
+  revokeShareForPath,
+} from "./utils";
 
 export async function handleRequestDelete({
   bucket,
