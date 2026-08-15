@@ -17,8 +17,6 @@
   "exclude": [
     "node_modules",
     "build",
-    "legacy/**/*",
-    "BUG_AUDIT.md",
     "src/worker.ts",
     "src/webdav",
     "src/features/transfer/thumbnail.worker.ts"

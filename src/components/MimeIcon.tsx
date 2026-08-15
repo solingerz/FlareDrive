@@ -11,21 +11,22 @@ import VideoFileIcon from "@mui/icons-material/VideoFile";
 const MimeIcon = memo(function MimeIcon({
   contentType,
 }: {
-  contentType: string;
+  contentType?: string;
 }) {
-  return contentType.startsWith("image/") ? (
+  const type = contentType ?? "";
+  return type.startsWith("image/") ? (
     <ImageIcon fontSize="large" />
-  ) : contentType.startsWith("audio/") ? (
+  ) : type.startsWith("audio/") ? (
     <AudioFileIcon fontSize="large" />
-  ) : contentType.startsWith("video/") ? (
+  ) : type.startsWith("video/") ? (
     <VideoFileIcon fontSize="large" />
-  ) : contentType === "application/pdf" ? (
+  ) : type === "application/pdf" ? (
     <PdfIcon fontSize="large" />
-  ) : ["application/zip", "application/gzip"].includes(contentType) ? (
+  ) : ["application/zip", "application/gzip"].includes(type) ? (
     <FolderZipOutlinedIcon fontSize="large" />
-  ) : contentType.startsWith("text/") ? (
+  ) : type.startsWith("text/") ? (
     <CodeIcon fontSize="large" />
-  ) : contentType === "application/x-directory" ? (
+  ) : type === "application/x-directory" ? (
     <FolderIcon fontSize="large" />
   ) : (
     <InsertDriveFileOutlinedIcon fontSize="large" />

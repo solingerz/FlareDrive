@@ -24,8 +24,8 @@ import {
 } from "../features/transfer/transferQueue";
 import { humanReadableSize } from "../features/transfer/utils";
 import {
-  CheckCircleOutline as CheckCircleOutlineIcon,
-  ErrorOutline as ErrorOutlineIcon,
+  CheckCircleOutlineOutlined as CheckCircleOutlineIcon,
+  ErrorOutlineOutlined as ErrorOutlineIcon,
   Pause as PauseIcon,
   PlayArrow as PlayArrowIcon,
   Close as CloseIcon,
@@ -137,7 +137,7 @@ const ProgressDialog = memo(function ProgressDialog({
 
       {tasks.length === 0 ? (
         <DialogContent>
-          <Typography textAlign="center" color="text.secondary">
+          <Typography align="center" color="text.secondary">
             No tasks
           </Typography>
         </DialogContent>
@@ -154,8 +154,10 @@ const ProgressDialog = memo(function ProgressDialog({
                   )} / ${humanReadableSize(task.total)} (${taskProgressPercent(task).toFixed(
                     0
                   )}%)`}
-                  primaryTypographyProps={{ noWrap: true, title: task.name }}
-                  secondaryTypographyProps={{ noWrap: true }}
+                  slotProps={{
+                    primary: { noWrap: true, title: task.name },
+                    secondary: { noWrap: true },
+                  }}
                 />
 
                 <ListItemSecondaryAction>

@@ -75,14 +75,14 @@ const FileItemRow = memo(function FileItemRow({
   };
 
   return (
-    <Grid item xs={12} sm={6} md={4} lg={3} xl={2}>
+    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3, xl: 2 }}>
       <ListItemButton
         selected={selected}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         sx={{ userSelect: "none" }}
       >
-        <ListItemIcon>
+        <ListItemIcon sx={{ minWidth: 56 }}>
           {file.customMetadata?.thumbnail ? (
             <img
               src={`/webdav/_$flaredrive$/thumbnails/${file.customMetadata.thumbnail}.png`}
@@ -96,17 +96,12 @@ const FileItemRow = memo(function FileItemRow({
         </ListItemIcon>
         <ListItemText
           primary={extractFilename(file.key)}
-          primaryTypographyProps={{
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
+          slotProps={{ primary: { noWrap: true } }}
           secondary={
             <React.Fragment>
               <Box
                 sx={{
-                  display: "inline-block",
-                  minWidth: "160px",
+                  display: "block",
                   marginRight: 1,
                 }}
               >

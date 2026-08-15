@@ -894,7 +894,6 @@ export async function processTransferTask({
       thumbnailDigest = digestHex;
     } catch (error: unknown) {
       if (isAbortError(error)) throw error;
-      console.log("Thumbnail generation/upload skipped");
     }
   }
 

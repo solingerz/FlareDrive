@@ -45,14 +45,16 @@ function Header({
         open={Boolean(anchorEl)}
         onClose={() => setAnchorEl(null)}
         disableRestoreFocus={openProgressAfterMenuClose}
-        TransitionProps={{
-          onExited: () => {
-            if (!openProgressAfterMenuClose) return;
-            if (document.activeElement instanceof HTMLElement) {
-              document.activeElement.blur();
-            }
-            setShowProgressDialog(true);
-            setOpenProgressAfterMenuClose(false);
+        slotProps={{
+          transition: {
+            onExited: () => {
+              if (!openProgressAfterMenuClose) return;
+              if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+              }
+              setShowProgressDialog(true);
+              setOpenProgressAfterMenuClose(false);
+            },
           },
         }}
       >

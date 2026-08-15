@@ -32,7 +32,7 @@ function fromR2Object(object: R2Object | typeof ROOT_OBJECT): DavProperties {
     displayname: object.httpMetadata?.contentDisposition,
     getcontentlanguage: object.httpMetadata?.contentLanguage,
     getcontentlength: object.size.toString(),
-    getcontenttype: object.httpMetadata?.contentType,
+    getcontenttype: object.httpMetadata?.contentType ?? "application/octet-stream",
     getetag: object.etag,
     getlastmodified: object.uploaded.toUTCString(),
     resourcetype:
@@ -70,7 +70,6 @@ export async function handleRequestPropfind({
   const depth = request.headers.get("Depth") ?? "infinity";
 
   const encoder = new TextEncoder();
-  let isFirst = true;
 
   const stream = new ReadableStream({
     async start(controller) {
