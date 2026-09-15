@@ -5,7 +5,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "build",
-    chunkSizeWarningLimit: 400,
     rolldownOptions: {
       output: {
         codeSplitting: {
