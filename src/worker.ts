@@ -24,6 +24,7 @@ type WorkerEnv = {
   WEBDAV_USERNAME: string;
   WEBDAV_PASSWORD: string;
   WEBDAV_PUBLIC_READ?: string;
+  WEBDAV_ALLOW_EXTENSION_WRITES?: string;
   [key: string]: unknown;
 };
 
@@ -99,17 +100,57 @@ function isJsonContentType(contentType: string | null): boolean {
   return contentType?.split(";", 1)[0].trim().toLowerCase() === "application/json";
 }
 
-function validateSameOriginBrowserWrite(request: Request): Response | null {
+const EXTENSION_ORIGIN_PROTOCOLS = new Set([
+  "chrome-extension:",
+  "moz-extension:",
+  "safari-web-extension:",
+]);
+
+/**
+ * 判断 Origin 是否为格式合法的浏览器扩展 origin（`scheme://host`，无路径）。
+ */
+function isExtensionOrigin(origin: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+
+  const protocol = url.protocol.toLowerCase();
+  if (!EXTENSION_ORIGIN_PROTOCOLS.has(protocol) || !url.host) return false;
+
+  return `${protocol}//${url.host.toLowerCase()}` === origin.toLowerCase();
+}
+
+/**
+ * 判断请求是否来自被显式放行的浏览器扩展。
+ * 仅在 WEBDAV_ALLOW_EXTENSION_WRITES=true 时生效，且不限定具体扩展。
+ * 注意：Origin 不是身份认证，非浏览器客户端本就可以伪造或省略它，
+ * 此处仅用于把「浏览器扩展客户端」从跨源网页中区分出来。
+ */
+function isAllowedExtensionOrigin(origin: string, env: WorkerEnv): boolean {
+  if (env.WEBDAV_ALLOW_EXTENSION_WRITES !== "true") return false;
+  return isExtensionOrigin(origin);
+}
+
+function validateSameOriginBrowserWrite(
+  request: Request,
+  env: WorkerEnv
+): Response | null {
   if (!WEBDAV_WRITE_METHODS.has(request.method)) return null;
 
   const requestOrigin = new URL(request.url).origin;
   const origin = request.headers.get("Origin");
-  if (origin && origin !== requestOrigin) {
+  const extensionOriginAllowed =
+    origin !== null && isAllowedExtensionOrigin(origin, env);
+
+  if (origin && origin !== requestOrigin && !extensionOriginAllowed) {
     return new Response("Forbidden", { status: 403 });
   }
 
   const fetchSite = request.headers.get("Sec-Fetch-Site");
-  if (fetchSite && fetchSite !== "same-origin") {
+  if (fetchSite && fetchSite !== "same-origin" && !extensionOriginAllowed) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -393,7 +434,7 @@ async function handleShareDownload(pathname: string, env: WorkerEnv): Promise<Re
 async function handleWebdavRequest(request: Request, env: WorkerEnv): Promise<Response> {
   if (request.method === "OPTIONS") return handleWebdavOptions();
 
-  const sameOriginError = validateSameOriginBrowserWrite(request);
+  const sameOriginError = validateSameOriginBrowserWrite(request, env);
   if (sameOriginError) return sameOriginError;
 
   const authError = requireAuth(request, {

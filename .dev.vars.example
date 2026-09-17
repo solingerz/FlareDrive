@@ -5,3 +5,6 @@ WEBDAV_PASSWORD=change-me
 # WEBDAV_PUBLIC_READ=true
 # SHARE_ENABLED=true
 # SHARE_DEFAULT_EXPIRE_SECONDS=3600
+
+# Allow browser-extension origins to perform WebDAV writes (default: false).
+# WEBDAV_ALLOW_EXTENSION_WRITES=true

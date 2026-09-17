@@ -42,7 +42,9 @@
   "vars": {
     "WEBDAV_PUBLIC_READ": "false",
     "SHARE_ENABLED": "false",
-    "SHARE_DEFAULT_EXPIRE_SECONDS": "3600"
+    "SHARE_DEFAULT_EXPIRE_SECONDS": "3600",
+    // Optional: allow browser-extension origins to perform WebDAV writes.
+    // "WEBDAV_ALLOW_EXTENSION_WRITES": "true",
   },
   "workers_dev": false,
   "preview_urls": false,

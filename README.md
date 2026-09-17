@@ -86,6 +86,7 @@ npm run deploy
 | `WEBDAV_USERNAME` | Yes | - | Basic Auth username |
 | `WEBDAV_PASSWORD` | Yes | - | Basic Auth password |
 | `WEBDAV_PUBLIC_READ` | No | `false` | Allow unauthenticated `GET`/`HEAD`/`PROPFIND` |
+| `WEBDAV_ALLOW_EXTENSION_WRITES` | No | `false` | Allow browser-extension origins (e.g. WebDAV clients in Chrome/Firefox/Safari) to perform WebDAV writes |
 | `SHARE_ENABLED` | No | `false` | Enable `/api/share` and `/s/<token>` |
 | `SHARE_DEFAULT_EXPIRE_SECONDS` | No | `3600` | Share-link TTL in seconds |
 
@@ -105,6 +106,7 @@ Notes:
 - Uses standard WebDAV paths.
 - Typical operations (`PROPFIND`, `GET`, `PUT`, `DELETE`, `COPY`, `MOVE`, `MKCOL`) are supported.
 - Large uploads are handled by the web UI multipart flow.
+- WebDAV writes from web pages are restricted to the same origin. Browser-extension clients (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`) are rejected by default and can be enabled with `WEBDAV_ALLOW_EXTENSION_WRITES=true` (any extension is then trusted).
 
 ## Sharing
 
@@ -139,6 +141,7 @@ src/
 
 - Always use strong `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`.
 - Keep `WEBDAV_PUBLIC_READ=false` unless public read access is intentional.
+- Enabling `WEBDAV_ALLOW_EXTENSION_WRITES` trusts *any* installed browser extension origin to perform writes. `Origin` is not authentication and can be spoofed by non-browser clients; only enable it if you use extension-based WebDAV clients.
 - Consider external rate-limiting controls in front of Basic Auth endpoints.
 
 ## Acknowledgments
