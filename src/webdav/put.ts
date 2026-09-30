@@ -4,8 +4,10 @@ import {
   encodeArrayBufferToBase64,
   FD_RESULT_SHA256_HEADER,
   FD_SHA256_HEADER,
+  isDirectoryMetadata,
   isInternalPath,
   isThumbnailPath,
+  parentPathOf,
   RequestHandlerParams,
   revokeShareForPath,
   ROOT_OBJECT,
@@ -54,12 +56,26 @@ export async function handleRequestPut({
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  // Check if the parent directory exists
+  // RFC 9110, Section 9.3.4: reject Content-Range when partial updates are
+  // not supported.
+  if (request.headers.get("Content-Range") !== null) {
+    return new Response("Content-Range is not supported", { status: 400 });
+  }
+
+  const existing = await bucket.head(path);
+  if (existing !== null && isDirectoryMetadata(existing.httpMetadata)) {
+    // RFC 4918, Section 9.7.2: PUT to an existing collection is an error.
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
+  // Check that the parent collection exists
   if (!path.startsWith("_$flaredrive$/")) {
-    const parentPath = path.replace(/(\/|^)[^/]*$/, "");
+    const parentPath = parentPathOf(path);
     const parentDir =
       parentPath === "" ? ROOT_OBJECT : await bucket.head(parentPath);
-    if (parentDir === null) return new Response("Conflict", { status: 409 });
+    if (parentDir === null || !isDirectoryMetadata(parentDir.httpMetadata)) {
+      return new Response("Conflict", { status: 409 });
+    }
   }
 
   const thumbnail = request.headers.get("fd-thumbnail");
@@ -100,5 +116,8 @@ export async function handleRequestPut({
     headers.set(FD_RESULT_SHA256_HEADER, actualSha256Base64);
   }
 
-  return new Response("", { status: 201, headers });
+  return new Response(null, {
+    status: existing === null ? 201 : 204,
+    headers,
+  });
 }

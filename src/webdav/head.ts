@@ -1,8 +1,10 @@
 import {
+  encodeContentDispositionFilenameStar,
   isInternalPath,
   isThumbnailPath,
   notFound,
   RequestHandlerParams,
+  toAsciiFilenameFallback,
 } from "./utils";
 
 export async function handleRequestHead({
@@ -18,5 +20,16 @@ export async function handleRequestHead({
 
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
+  headers.set("Cache-Control", "no-cache");
+  headers.set("Accept-Ranges", "bytes");
+
+  const fileName = path.split("/").pop() || "file";
+  const asciiName = toAsciiFilenameFallback(fileName);
+  const encodedName = encodeContentDispositionFilenameStar(fileName);
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`
+  );
+
   return new Response(null, { headers });
 }

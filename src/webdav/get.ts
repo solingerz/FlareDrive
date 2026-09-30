@@ -72,6 +72,7 @@ export async function handleRequestGet({
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
   headers.set("Cache-Control", "no-cache");
+  headers.set("Accept-Ranges", "bytes");
 
   const fileName = path.split("/").pop() || "file";
   const asciiName = toAsciiFilenameFallback(fileName);
@@ -83,12 +84,20 @@ export async function handleRequestGet({
   headers.set("Content-Security-Policy", "default-src 'none'; sandbox");
 
   let contentType = headers.get("Content-Type") || "application/octet-stream";
+  // R2 populates `range` even for full reads, so only treat the response as
+  // partial when the client actually sent a Range header.
+  const hasRangeHeader = request.headers.get("Range") !== null;
+  const range = hasRangeHeader ? obj.range : undefined;
 
   if (isTextFile(contentType, path)) {
     contentType = addUtf8Charset(contentType);
     headers.set("Content-Type", contentType);
 
-    if (contentType.toLowerCase().includes("text/html") && obj.body) {
+    if (
+      range === undefined &&
+      contentType.toLowerCase().includes("text/html") &&
+      obj.body
+    ) {
       const contentLength = Number(headers.get("Content-Length"));
       const bodyWithCharset = addHtmlCharset(
         obj.body,
@@ -97,6 +106,37 @@ export async function handleRequestGet({
       headers.delete("Content-Length");
       if (isThumbnailPath(path)) headers.set("Cache-Control", "max-age=31536000");
       return new Response(bodyWithCharset, { headers });
+    }
+  }
+
+  // R2 already applied the range, so the response must be a 206 with a
+  // matching Content-Range header (RFC 9110, Section 14.4).
+  if (range !== undefined) {
+    const total = obj.size;
+    // The runtime range object may expose `offset`/`length`/`suffix` via a
+    // prototype, so members must be checked by value (an `in` check would
+    // always see `suffix`).
+    const { offset, length, suffix } = range as {
+      offset?: number;
+      length?: number;
+      suffix?: number;
+    };
+    let start: number;
+    let resolvedLength: number;
+
+    if (suffix !== undefined) {
+      resolvedLength = Math.min(suffix, total);
+      start = total - resolvedLength;
+    } else {
+      start = offset ?? 0;
+      resolvedLength = length ?? total - start;
+    }
+
+    if (resolvedLength > 0) {
+      const end = start + resolvedLength - 1;
+      headers.set("Content-Range", `bytes ${start}-${end}/${total}`);
+      headers.set("Content-Length", `${resolvedLength}`);
+      return new Response(obj.body, { status: 206, headers });
     }
   }
 

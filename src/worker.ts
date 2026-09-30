@@ -65,6 +65,8 @@ const WEBDAV_HANDLERS: Record<string, Handler> = {
   DELETE: handleRequestDelete,
 };
 
+const WEBDAV_ALLOW = ["OPTIONS", ...Object.keys(WEBDAV_HANDLERS)].join(", ");
+
 function getWebdavPathSegments(pathname: string): string[] | null {
   if (pathname === WEBDAV_BASE || pathname === `${WEBDAV_BASE}/`) return [];
   if (!pathname.startsWith(`${WEBDAV_BASE}/`)) return null;
@@ -86,14 +88,14 @@ function getWebdavParams(request: Request, env: WorkerEnv) {
 function handleWebdavOptions() {
   return new Response(null, {
     headers: {
-      Allow: Object.keys(WEBDAV_HANDLERS).join(", "),
+      Allow: WEBDAV_ALLOW,
       DAV: "1",
     },
   });
 }
 
-function methodNotAllowed() {
-  return new Response(null, { status: 405 });
+function methodNotAllowed(allow: string) {
+  return new Response(null, { status: 405, headers: { Allow: allow } });
 }
 
 function isJsonContentType(contentType: string | null): boolean {
@@ -449,7 +451,8 @@ async function handleWebdavRequest(request: Request, env: WorkerEnv): Promise<Re
   const [bucket, path] = webdavParams;
   if (!bucket) return new Response("Not found", { status: 404 });
 
-  const handler = WEBDAV_HANDLERS[request.method] ?? methodNotAllowed;
+  const handler =
+    WEBDAV_HANDLERS[request.method] ?? (() => methodNotAllowed(WEBDAV_ALLOW));
   const params: RequestHandlerParams = { bucket, path, request, env };
   return handler(params);
 }
@@ -460,13 +463,13 @@ export default {
 
     if (pathname === "/api/share/status") {
       if (request.method === "GET") return handleShareStatus(request, env);
-      return methodNotAllowed();
+      return methodNotAllowed("GET, OPTIONS");
     }
 
     if (pathname === "/api/share") {
       if (request.method === "OPTIONS") return handleShareOptions();
       if (request.method === "POST") return handleSharePost(request, env);
-      return methodNotAllowed();
+      return methodNotAllowed("POST, OPTIONS");
     }
 
     if (pathname === WEBDAV_BASE || pathname.startsWith(`${WEBDAV_BASE}/`)) {

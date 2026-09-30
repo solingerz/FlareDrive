@@ -7,6 +7,43 @@ export interface RequestHandlerParams {
 
 export const WEBDAV_ENDPOINT = "/webdav/";
 
+/**
+ * Percent-encodes each path segment so the result is a valid URI reference
+ * (RFC 4918, Section 8.3). `encodeURI` alone would leave `?` and `#`
+ * unescaped inside `href` values.
+ */
+export function encodeHref(key: string): string {
+  const encodedKey = key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${WEBDAV_ENDPOINT}${encodedKey}`;
+}
+
+export function parentPathOf(path: string): string {
+  return path.replace(/(\/|^)[^/]*$/, "");
+}
+
+export function isDirectoryMetadata(
+  metadata: R2HTTPMetadata | undefined
+): boolean {
+  return metadata?.contentType === "application/x-directory";
+}
+
+/**
+ * RFC 4918, Section 8.4: a body present on a method that does not define one
+ * (and would ignore it) MUST be rejected with 415 Unsupported Media Type.
+ */
+export function rejectUnexpectedBody(request: Request): Response | null {
+  const contentLength = request.headers.get("Content-Length");
+  const hasBody =
+    (contentLength !== null && Number(contentLength) > 0) ||
+    request.headers.has("Transfer-Encoding");
+  return hasBody
+    ? new Response("Unsupported Media Type", { status: 415 })
+    : null;
+}
+
 const INTERNAL_PREFIX = "_$flaredrive$/";
 const THUMBNAIL_PATH_PATTERN = /^_\$flaredrive\$\/thumbnails\/[a-f0-9]{40}\.png$/i;
 export const THUMBNAIL_DIGEST_PATTERN = /^[a-f0-9]{40}$/i;
@@ -33,6 +70,7 @@ export const ROOT_OBJECT = {
   customMetadata: undefined,
   size: 0,
   etag: undefined,
+  httpEtag: undefined,
 };
 
 export function notFound() {
